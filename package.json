@@ -2,6 +2,12 @@
     "name": "myde-dbus",
     "version": "0.1.0",
     "type": "module",
+    "repository": {
+        "url": "https://github.com/xushengfeng/node-dbus"
+    },
+    "keywords": [
+        "dbus"
+    ],
     "main": "./dist/index.cjs",
     "module": "./dist/index.mjs",
     "types": "./dist/index.d.ts",
