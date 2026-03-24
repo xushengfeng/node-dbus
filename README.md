@@ -34,13 +34,10 @@ async function main() {
     // 连接到系统总线或用户会话总线
     await new Promise((resolve) => socket.connect("/run/user/1000/bus", resolve));
 
-    // 简易外部身份验证 (External Auth)
-    const uid = process.getuid().toString();
-    const encodedUid = Buffer.from(uid).toString("hex");
-    socket.write(Buffer.from(`\0AUTH EXTERNAL ${encodedUid}\r\nBEGIN\r\n`));
-
-    // 初始化 IO 并创建客户端
+    // 初始化 IO 并自动进行身份验证连接
     const io = new dbusIO({ socket });
+    await io.connect();
+
     const client = new dbusClient({ io });
 
     // 依次获取: 服务 (Service) -> 对象路径 (Object Path) -> 接口 (Interface)
@@ -71,11 +68,8 @@ async function main() {
     const socket = new USocket();
     await new Promise((resolve) => socket.connect("/run/user/1000/bus", resolve));
 
-    const uid = process.getuid().toString();
-    const encodedUid = Buffer.from(uid).toString("hex");
-    socket.write(Buffer.from(`\0AUTH EXTERNAL ${encodedUid}\r\nBEGIN\r\n`));
-
     const io = new dbusIO({ socket });
+    await io.connect();
 
     // 初始化 Server 并申请注册总线名称
     const server = new dbusServer(io, "com.my.CustomService");

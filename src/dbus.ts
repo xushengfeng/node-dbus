@@ -2,6 +2,8 @@ import type { USocket } from "myde-unix-socket";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
+import { authenticate } from "./auth";
+
 export class dbusIO {
     private socket: USocket;
     private serial = 0;
@@ -9,10 +11,18 @@ export class dbusIO {
         new Map();
     private buffer: Uint8Array = new Uint8Array(0);
     private messageHandlers: Set<(msg: dbusMessage) => void> = new Set();
+    private isConnected = false;
 
     constructor(op: { socket: USocket }) {
         this.socket = op.socket;
+        // Don't setup read handler until authenticated
+    }
+
+    async connect(): Promise<void> {
+        if (this.isConnected) return;
+        await authenticate(this.socket);
         this.setupReadHandler();
+        this.isConnected = true;
     }
 
     addMessageHandler(handler: (msg: dbusMessage) => void): void {
@@ -76,6 +86,9 @@ export class dbusIO {
     }
 
     async call(message: dbusMessage): Promise<dbusMessage> {
+        if (!this.isConnected) {
+            throw new Error("dbusIO is not connected/authenticated. Call connect() first.");
+        }
         message.setType(MessageType.MethodCall);
         const serial = this.nextSerial();
         message.setSerial(serial);
@@ -96,6 +109,9 @@ export class dbusIO {
     }
 
     async send(message: dbusMessage): Promise<void> {
+        if (!this.isConnected) {
+            throw new Error("dbusIO is not connected/authenticated. Call connect() first.");
+        }
         if (!message.getSerial()) {
             message.setSerial(this.nextSerial());
         }
