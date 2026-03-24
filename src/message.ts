@@ -1,5 +1,6 @@
 import { Codec, Decoder } from "./codec";
 import { align, Endian, type HeaderField, HeaderFieldCode, type Message, MessageType } from "./types";
+import { splitSignature } from "./signature";
 
 export class dbusMessage {
     private message: Message;
@@ -110,8 +111,12 @@ export class dbusMessage {
         return encodeMessage(this.message);
     }
 
-    static decode(data: Uint8Array): dbusMessage {
-        return new dbusMessage(decodeMessage(data));
+    static decode(data: Uint8Array): { message: dbusMessage, consumed: number } {
+        const decoded = decodeMessage(data);
+        return {
+            message: new dbusMessage(decoded.message),
+            consumed: decoded.consumed,
+        };
     }
 
     toJSON(): Message {
@@ -139,27 +144,17 @@ function getSignatureForField(code: HeaderFieldCode): string {
     }
 }
 
-function encodeHeaderField(field: HeaderField, endian: Endian): Uint8Array {
-    const codec = new Codec(endian);
-    codec.writeByte(field.code);
-    const sig = getSignatureForField(field.code);
-    codec.writeVariant(field.value, sig);
-    return codec.toUint8Array();
-}
+
 
 function encodeMessage(message: Message): Uint8Array {
     const endian = message.header.endian;
-    const headerFields: Uint8Array[] = [];
-
-    for (const field of message.header.fields) {
-        headerFields.push(encodeHeaderField(field, endian));
-    }
 
     const signature = (message.header.fields.find((f) => f.code === HeaderFieldCode.Signature)?.value as string) ?? "";
     const bodyCodec = new Codec(endian);
 
-    for (let i = 0; i < message.body.length; i++) {
-        bodyCodec.writeValue(message.body[i], signature[i]);
+    const sigParts = splitSignature(signature);
+    for (let i = 0; i < message.body.length && i < sigParts.length; i++) {
+        bodyCodec.writeValue(message.body[i], sigParts[i]);
     }
 
     const bodyPart = bodyCodec.toUint8Array();
@@ -173,23 +168,47 @@ function encodeMessage(message: Message): Uint8Array {
     codec.writeUint32(bodyLength);
     codec.writeUint32(message.header.serial);
 
-    const headerStart = codec.toUint8Array();
-    const headerFieldsPart = concatArrays(headerFields);
-    const padding = align(headerStart.length + headerFieldsPart.length, 8);
+    // Array length placeholder
+    const arrayLengthOffset = codec.length;
+    codec.writeUint32(0);
 
-    const result = new Uint8Array(headerStart.length + headerFieldsPart.length + padding + bodyPart.length);
-    let offset = 0;
-    result.set(headerStart, offset);
-    offset += headerStart.length;
-    result.set(headerFieldsPart, offset);
-    offset += headerFieldsPart.length;
-    offset += padding;
-    result.set(bodyPart, offset);
+    // Array structural elements must be 8-byte aligned
+    // But actually DBus structs in arrays are 8-byte aligned
+    // Wait, let's just write the fields!
+    const fieldsStart = codec.length;
+    for (const field of message.header.fields) {
+        // STRUCT alignment
+        const pad = align(codec.length, 8);
+        for (let i = 0; i < pad; i++) codec.writeByte(0);
+        
+        codec.writeByte(field.code);
+        const sig = getSignatureForField(field.code);
+        codec.writeVariant(field.value, sig);
+    }
+    const fieldsEnd = codec.length;
+    
+    // Fill in the array length
+    const view = new DataView(codec.data.buffer, codec.data.byteOffset, codec.data.byteLength);
+    if (endian === Endian.Little) {
+        view.setUint32(arrayLengthOffset, fieldsEnd - fieldsStart, true);
+    } else {
+        view.setUint32(arrayLengthOffset, fieldsEnd - fieldsStart, false);
+    }
+
+    // Body padding
+    const bodyPad = align(codec.length, 8);
+    for (let i = 0; i < bodyPad; i++) codec.writeByte(0);
+
+    const headerPart = codec.toUint8Array();
+
+    const result = new Uint8Array(headerPart.length + bodyPart.length);
+    result.set(headerPart, 0);
+    result.set(bodyPart, headerPart.length);
 
     return result;
 }
 
-function decodeMessage(data: Uint8Array): Message {
+function decodeMessage(data: Uint8Array): { message: Message, consumed: number } {
     const decoder = new Decoder(data);
     const endian = decoder.readByte() as Endian;
     const type = decoder.readByte() as MessageType;
@@ -198,62 +217,44 @@ function decodeMessage(data: Uint8Array): Message {
     const bodyLength = decoder.readUint32();
     const serial = decoder.readUint32();
 
-    // Header fields start at offset 12
-    const headerFieldsStart = 12;
-    const headerFieldsEnd = data.length - bodyLength;
-
-    const headerDecoder = new Decoder(
-        new Uint8Array(data.buffer, data.byteOffset + headerFieldsStart, headerFieldsEnd - headerFieldsStart),
-        endian,
-    );
+    const fieldsLength = decoder.readUint32();
+    const fieldsStart = decoder.position;
+    
     const fields: HeaderField[] = [];
-
-    // 读取header fields，直到遇到padding或到达边界
-    while (headerDecoder.position < headerFieldsEnd - headerFieldsStart) {
-        // 保存当前位置，以便在读取失败时恢复
-        const savedPosition = headerDecoder.position;
-
-        try {
-            const code = headerDecoder.readByte() as HeaderFieldCode;
-            const variant = headerDecoder.readVariant();
-            fields.push({ code, value: variant.value });
-        } catch (e) {
-            // 读取失败，可能是遇到了padding
-            headerDecoder.position = savedPosition;
-            break;
-        }
+    while (decoder.position - fieldsStart < fieldsLength) {
+        // Struct alignment
+        decoder.position += align(decoder.position, 8);
+        
+        const code = decoder.readByte() as HeaderFieldCode;
+        const variant = decoder.readVariant();
+        fields.push({ code, value: variant.value });
     }
+    
+    // Ensure we skip exactly fieldsLength bytes even if we misread
+    decoder.position = fieldsStart + fieldsLength;
 
+    // Body alignment
+    decoder.position += align(decoder.position, 8);
+    
     const signature = (fields.find((f) => f.code === HeaderFieldCode.Signature)?.value as string) ?? "";
     const body: unknown[] = [];
+    
     if (bodyLength > 0) {
-        const bodyDecoder = new Decoder(
-            new Uint8Array(data.buffer, data.byteOffset + headerFieldsEnd, bodyLength),
-            endian,
-        );
-
-        for (let i = 0; i < signature.length; i++) {
-            body.push(bodyDecoder.readValue(signature[i]));
+        const bodyStart = decoder.position;
+        const sigParts = splitSignature(signature);
+        for (let i = 0; i < sigParts.length; i++) {
+            body.push(decoder.readValue(sigParts[i]));
         }
+        decoder.position = bodyStart + bodyLength;
     }
 
     return {
-        header: { endian, type, flags, version, bodyLength, serial, fields },
-        body,
+        message: {
+            header: { endian, type, flags, version, bodyLength, serial, fields },
+            body,
+        },
+        consumed: decoder.position,
     };
 }
 
-function concatarrays(arrays: Uint8Array[]): Uint8Array {
-    const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const arr of arrays) {
-        result.set(arr, offset);
-        offset += arr.length;
-    }
-    return result;
-}
 
-function concatArrays(arrays: Uint8Array[]): Uint8Array {
-    return concatarrays(arrays);
-}

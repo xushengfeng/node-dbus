@@ -78,6 +78,8 @@ export class Codec {
 
     writeUint32(value: number): void {
         this.ensureCapacity(4);
+        const pad = align(this.offset, 4);
+        this.offset += pad;
         if (this.endian === Endian.Little) {
             this.view.setUint32(this.offset, value, true);
         } else {
@@ -201,6 +203,38 @@ export class Codec {
                 );
                 break;
             default:
+                if (signature.startsWith("a")) {
+                    const elemSig = signature.substring(1);
+                    const arr = value as unknown[];
+                    const arrayCodec = new Codec(this.endian);
+                    
+                    for (const elem of arr) {
+                        if (elemSig === "t" || elemSig === "d" || elemSig.startsWith("r")) {
+                            arrayCodec.offset += align(arrayCodec.offset, 8);
+                        } else if (elemSig === "i" || elemSig === "u" || elemSig === "s" || elemSig === "o" || elemSig === "g" || elemSig === "v" || elemSig.startsWith("a")) {
+                            arrayCodec.offset += align(arrayCodec.offset, 4);
+                        } else if (elemSig === "n" || elemSig === "q") {
+                            arrayCodec.offset += align(arrayCodec.offset, 2);
+                        }
+                        arrayCodec.writeValue(elem, elemSig);
+                    }
+                    
+                    const arrayData = arrayCodec.toUint8Array();
+                    this.writeUint32(arrayData.length);
+                    
+                    if (elemSig === "t" || elemSig === "d" || elemSig.startsWith("r")) {
+                        this.offset += align(this.offset, 8);
+                    } else if (elemSig === "i" || elemSig === "u" || elemSig === "s" || elemSig === "o" || elemSig === "g" || elemSig === "v" || elemSig.startsWith("a")) {
+                        this.offset += align(this.offset, 4);
+                    } else if (elemSig === "n" || elemSig === "q") {
+                        this.offset += align(this.offset, 2);
+                    }
+                    
+                    this.ensureCapacity(arrayData.length);
+                    new Uint8Array(this.buffer, this.offset, arrayData.length).set(arrayData);
+                    this.offset += arrayData.length;
+                    break;
+                }
                 throw new Error(`Unsupported signature: ${signature}`);
         }
     }
@@ -266,6 +300,7 @@ export class Decoder {
     }
 
     readUint32(): number {
+        this.offset += align(this.offset, 4);
         const value =
             this.endian === Endian.Little
                 ? this.view.getUint32(this.offset, true)
@@ -362,6 +397,30 @@ export class Decoder {
             case "v":
                 return this.readVariant();
             default:
+                if (signature.startsWith("a")) {
+                    const elemSig = signature.substring(1);
+                    const length = this.readUint32();
+                    // Array elements might need alignment
+                    if (elemSig === "t" || elemSig === "d" || elemSig.startsWith("r")) {
+                        this.offset += align(this.offset, 8);
+                    } else if (elemSig === "i" || elemSig === "u" || elemSig === "s" || elemSig === "o" || elemSig === "g" || elemSig === "v" || elemSig.startsWith("a")) {
+                        this.offset += align(this.offset, 4);
+                    } else if (elemSig === "n" || elemSig === "q") {
+                        this.offset += align(this.offset, 2);
+                    }
+                    
+                    const startOffset = this.offset;
+                    const arr: unknown[] = [];
+                    // if element sig is empty (e.g. from empty signature), length is 0, we can break early
+                    if (elemSig === "") return arr;
+                    if (length === 0) return arr;
+                    while (this.offset - startOffset < length) {
+                        arr.push(this.readValue(elemSig));
+                    }
+                    // Ensure we skip exactly length bytes even if misread
+                    this.offset = startOffset + length;
+                    return arr;
+                }
                 throw new Error(`Unsupported signature: ${signature}`);
         }
     }

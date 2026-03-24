@@ -1,4 +1,6 @@
-// import { USocket } from "myde-unix-socket";
+import { ChildProcess, spawn } from "child_process";
+import fs from "fs";
+import path from "path";
 const mus = require("myde-unix-socket") as typeof import("myde-unix-socket");
 import type { USocket } from "myde-unix-socket";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -6,8 +8,7 @@ import { dbusClient } from "../src/client";
 import { dbusIO } from "../src/dbus";
 import { dbusMessage } from "../src/message";
 
-const SYSTEM_BUS = "/var/run/dbus/system_bus_socket";
-const BUS = "/run/user/1000/bus";
+const SOCKET_PATH = path.join(__dirname, "test-bus.sock");
 
 function getUid(): string {
 	return process.getuid?.()?.toString() ?? "1000";
@@ -22,14 +23,10 @@ function encodeUid(uid: string): string {
 async function authenticate(socket: USocket): Promise<void> {
 	const uid = getUid();
 	const encodedUid = encodeUid(uid);
-	socket.write(`AUTH EXTERNAL ${encodedUid}\r\n`);
-
 	return new Promise((resolve, reject) => {
 		const chunks: Uint8Array[] = [];
 
 		const onData = (data: Buffer) => {
-			console.log(data.toString());
-
 			chunks.push(new Uint8Array(data));
 			const totalLen = chunks.reduce((s, c) => s + c.length, 0);
 			const buffer = new Uint8Array(totalLen);
@@ -39,13 +36,12 @@ async function authenticate(socket: USocket): Promise<void> {
 				offset += c.length;
 			}
 			const str = new TextDecoder().decode(buffer);
-			console.log(str);
 
 			if (str.includes("\n")) {
 				const line = str.split("\n")[0];
 
 				if (line.startsWith("OK")) {
-					socket.write("BEGIN\r\n");
+					socket.write(Buffer.from("BEGIN\r\n"));
 					socket.off("data", onData);
 					resolve();
 				} else if (line.startsWith("ERROR")) {
@@ -56,6 +52,8 @@ async function authenticate(socket: USocket): Promise<void> {
 		};
 
 		socket.on("data", onData);
+		socket.write(Buffer.from([0]));
+		socket.write(Buffer.from(`AUTH EXTERNAL ${encodedUid}\r\n`));
 
 		setTimeout(() => {
 			socket.off("data", onData);
@@ -67,21 +65,55 @@ async function authenticate(socket: USocket): Promise<void> {
 describe("D-Bus Client Integration", () => {
 	let socket: USocket;
 	let io: dbusIO;
+	let daemon: ChildProcess;
 
 	beforeAll(async () => {
+		if (fs.existsSync(SOCKET_PATH)) {
+			fs.unlinkSync(SOCKET_PATH);
+		}
+
+		daemon = spawn("dbus-daemon", [
+			"--session",
+			`--address=unix:path=${SOCKET_PATH}`,
+			"--print-address",
+		]);
+
+		await new Promise<void>((resolve, reject) => {
+			daemon.stdout?.on("data", (data) => {
+				resolve();
+			});
+			daemon.on("error", reject);
+			setTimeout(() => reject(new Error("Daemon start timeout")), 5000);
+		});
+
 		socket = new mus.USocket();
 		await new Promise<void>((resolve, reject) => {
-			socket.connect(BUS, () => resolve());
+			socket.connect(SOCKET_PATH, () => resolve());
 			socket.on("error", reject);
 			setTimeout(() => reject(new Error("Connection timeout")), 5000);
 		});
 
 		await authenticate(socket);
 		io = new dbusIO({ socket });
+
+		// Call Hello to register with the bus
+		await new Promise(r => setTimeout(r, 100));
+		const helloMsg = new dbusMessage();
+		helloMsg.setDestination("org.freedesktop.DBus");
+		helloMsg.setPath("/org/freedesktop/DBus");
+		helloMsg.setInterface("org.freedesktop.DBus");
+		helloMsg.setMember("Hello");
+		await io.call(helloMsg);
 	});
 
 	afterAll(() => {
 		socket?.destroy();
+		daemon?.kill();
+		try {
+			if (fs.existsSync(SOCKET_PATH)) {
+				fs.unlinkSync(SOCKET_PATH);
+			}
+		} catch (e) {}
 	});
 
 	it("should connect and authenticate", () => {

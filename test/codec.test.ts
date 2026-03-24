@@ -114,7 +114,7 @@ describe("dbusMessage", () => {
 		msg.setDestination("org.freedesktop.DBus");
 
 		const encoded = msg.encode();
-		const decoded = dbusMessage.decode(encoded);
+		const decoded = dbusMessage.decode(encoded).message;
 
 		expect(decoded.getSerial()).toBe(1);
 		expect(decoded.getPath()).toBe("/org/freedesktop/DBus");
@@ -131,7 +131,7 @@ describe("dbusMessage", () => {
 		msg.setBody(["Test String"]);
 
 		const encoded = msg.encode();
-		const decoded = dbusMessage.decode(encoded);
+		const decoded = dbusMessage.decode(encoded).message;
 
 		expect(decoded.getBody()).toEqual(["Test String"]);
 		expect(decoded.getSignature()).toBe("s");
@@ -145,7 +145,7 @@ describe("dbusMessage", () => {
 		msg.setBody([42]);
 
 		const encoded = msg.encode();
-		const decoded = dbusMessage.decode(encoded);
+		const decoded = dbusMessage.decode(encoded).message;
 
 		expect(decoded.getBody()).toEqual([42]);
 	});
@@ -158,7 +158,7 @@ describe("dbusMessage", () => {
 		msg.setBody([true]);
 
 		const encoded = msg.encode();
-		const decoded = dbusMessage.decode(encoded);
+		const decoded = dbusMessage.decode(encoded).message;
 
 		expect(decoded.getBody()).toEqual([true]);
 	});
@@ -171,7 +171,7 @@ describe("dbusMessage", () => {
 		msg.setBody(["Hello", 123]);
 
 		const encoded = msg.encode();
-		const decoded = dbusMessage.decode(encoded);
+		const decoded = dbusMessage.decode(encoded).message;
 
 		expect(decoded.getBody()).toEqual(["Hello", 123]);
 	});

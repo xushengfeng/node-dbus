@@ -20,6 +20,7 @@ export class dbusIO {
 
     private setupReadHandler(): void {
         this.socket.on("data", (data, fds) => {
+            console.log("socket received data len:", data.byteLength);
             const newData = new Uint8Array(data);
             const combined = new Uint8Array(this.buffer.length + newData.length);
             combined.set(this.buffer);
@@ -33,13 +34,15 @@ export class dbusIO {
         while (this.buffer.length >= 16) {
             // 尝试解码，如果失败则等待更多数据
             try {
-                const msg = dbusMessage.decode(this.buffer);
-                this.handleMessage(msg);
+                const result = dbusMessage.decode(this.buffer);
+                console.log("decode success, consumed:", result.consumed);
+                this.handleMessage(result.message);
 
-                // 解码成功，清空buffer
-                this.buffer = new Uint8Array(0);
+                // 解码成功，移除消耗的字节
+                this.buffer = this.buffer.slice(result.consumed);
             } catch (e) {
                 // 解码失败，可能需要更多数据
+                console.log("decode error:", e);
                 break;
             }
         }
@@ -65,6 +68,8 @@ export class dbusIO {
             this.pendingCalls.set(serial, { resolve, reject });
 
             const data = message.encode();
+            console.log("sending dbus message, len:", data.byteLength);
+            console.log("data hex:", Buffer.from(data).toString("hex"));
             this.socket.write(Buffer.from(data));
 
             setTimeout(() => {
