@@ -1,4 +1,4 @@
-# node-dbus
+# myde-dbus
 
 一个使用 TypeScript 编写的、基于 Node.js 原生 Unix Socket 的 D-Bus 客户端和服务端通信库。
 
@@ -15,7 +15,7 @@
 ## 安装
 
 ```bash
-npm install node-dbus myde-unix-socket
+npm install myde-dbus myde-unix-socket
 ```
 
 _注意：本库需要使用 `myde-unix-socket` 建立底层的 Unix Domain Socket 链接。_
@@ -25,7 +25,7 @@ _注意：本库需要使用 `myde-unix-socket` 建立底层的 Unix Domain Sock
 ### 客户端（Client）示例
 
 ```typescript
-import { dbusClient, dbusIO } from "node-dbus";
+import { dbusClient, dbusIO } from "myde-dbus";
 import { USocket } from "myde-unix-socket";
 
 async function main() {
@@ -61,7 +61,7 @@ main().catch(console.error);
 ### 服务端（Server）示例
 
 ```typescript
-import { dbusServer, dbusIO } from "node-dbus";
+import { dbusServer, dbusIO } from "myde-dbus";
 import { USocket } from "myde-unix-socket";
 
 async function main() {
