@@ -1,5 +1,6 @@
 import type { dbusIO } from "./dbus";
 import { dbusMessage } from "./message";
+import { MessageType } from "./types";
 
 type dbusClientOp = {
     io: dbusIO;
@@ -46,12 +47,16 @@ export class dbusInterface {
         this.io = op.io;
     }
 
-    async call(method: string, ...args: unknown[]): Promise<dbusMessage> {
+    async call(method: string, signature: string = "", ...args: unknown[]): Promise<dbusMessage> {
         const msg = new dbusMessage();
         msg.setDestination(this.op.destination);
         msg.setPath(this.op.path);
         msg.setInterface(this.op.interface);
         msg.setMember(method);
+        if (signature) {
+            msg.setSignature(signature);
+            msg.setBody(args);
+        }
         return this.io.call(msg);
     }
 
@@ -63,7 +68,6 @@ export class dbusInterface {
         msg.setMember("Get");
         msg.setSignature("ss");
         msg.setBody([this.op.interface, property]);
-        console.log("msg", msg);
 
         const response = await this.io.call(msg);
         return response.getBody()[0];
@@ -92,7 +96,40 @@ export class dbusInterface {
         return response.getBody()[0] as Record<string, unknown>;
     }
 
-    on(signal: string, callback: (...args: unknown[]) => void): void {
-        // TODO: 实现信号订阅
+    async on(signal: string, callback: (...args: unknown[]) => void): Promise<() => void> {
+        const rule = `type='signal',sender='${this.op.destination}',interface='${this.op.interface}',member='${signal}',path='${this.op.path}'`;
+        
+        const msg = new dbusMessage();
+        msg.setDestination("org.freedesktop.DBus");
+        msg.setPath("/org/freedesktop/DBus");
+        msg.setInterface("org.freedesktop.DBus");
+        msg.setMember("AddMatch");
+        msg.setSignature("s");
+        msg.setBody([rule]);
+        
+        await this.io.call(msg);
+        
+        const handler = (m: dbusMessage) => {
+            if (m.getType() === MessageType.Signal && 
+                m.getPath() === this.op.path &&
+                m.getInterface() === this.op.interface &&
+                m.getMember() === signal) {
+                callback(...m.getBody());
+            }
+        };
+        
+        this.io.addMessageHandler(handler);
+
+        return async () => {
+            this.io.removeMessageHandler(handler);
+            const removeMsg = new dbusMessage();
+            removeMsg.setDestination("org.freedesktop.DBus");
+            removeMsg.setPath("/org/freedesktop/DBus");
+            removeMsg.setInterface("org.freedesktop.DBus");
+            removeMsg.setMember("RemoveMatch");
+            removeMsg.setSignature("s");
+            removeMsg.setBody([rule]);
+            await this.io.call(removeMsg);
+        };
     }
 }

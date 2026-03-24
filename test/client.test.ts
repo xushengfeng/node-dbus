@@ -150,13 +150,13 @@ describe("D-Bus Client Integration", () => {
 		expect(owner).toBe("org.freedesktop.DBus");
 	});
 
-	it("should get dbus version", async () => {
+	it("should get dbus features", async () => {
 		const client = new dbusClient({ io });
 		const service = await client.getService("org.freedesktop.DBus");
 		const obj = await service.getObject("/org/freedesktop/DBus");
 		const iface = await obj.getInterface("org.freedesktop.DBus");
 
-		const version = await iface.get("Version");
-		expect(typeof version).toBe("string");
+		const features = await iface.get("Features") as { signature: string, value: string[] };
+		expect(Array.isArray(features.value)).toBe(true);
 	});
 });

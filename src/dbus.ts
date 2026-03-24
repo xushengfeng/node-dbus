@@ -8,10 +8,19 @@ export class dbusIO {
     private pendingCalls: Map<number, { resolve: (msg: dbusMessage) => void; reject: (err: Error) => void }> =
         new Map();
     private buffer: Uint8Array = new Uint8Array(0);
+    private messageHandlers: Set<(msg: dbusMessage) => void> = new Set();
 
     constructor(op: { socket: USocket }) {
         this.socket = op.socket;
         this.setupReadHandler();
+    }
+
+    addMessageHandler(handler: (msg: dbusMessage) => void): void {
+        this.messageHandlers.add(handler);
+    }
+
+    removeMessageHandler(handler: (msg: dbusMessage) => void): void {
+        this.messageHandlers.delete(handler);
     }
 
     private nextSerial(): number {
@@ -19,8 +28,7 @@ export class dbusIO {
     }
 
     private setupReadHandler(): void {
-        this.socket.on("data", (data, fds) => {
-            console.log("socket received data len:", data.byteLength);
+        this.socket.on("data", (data) => {
             const newData = new Uint8Array(data);
             const combined = new Uint8Array(this.buffer.length + newData.length);
             combined.set(this.buffer);
@@ -35,14 +43,12 @@ export class dbusIO {
             // 尝试解码，如果失败则等待更多数据
             try {
                 const result = dbusMessage.decode(this.buffer);
-                console.log("decode success, consumed:", result.consumed);
                 this.handleMessage(result.message);
 
                 // 解码成功，移除消耗的字节
                 this.buffer = this.buffer.slice(result.consumed);
             } catch (e) {
                 // 解码失败，可能需要更多数据
-                console.log("decode error:", e);
                 break;
             }
         }
@@ -54,8 +60,18 @@ export class dbusIO {
             const pending = this.pendingCalls.get(replySerial);
             if (pending) {
                 this.pendingCalls.delete(replySerial);
-                pending.resolve(msg);
+                if (msg.getType() === MessageType.Error) {
+                    const errorName = msg.getErrorName() || "UnknownError";
+                    const errorText = msg.getBody()[0] || "";
+                    pending.reject(new Error(`[${errorName}] ${errorText}`));
+                } else {
+                    pending.resolve(msg);
+                }
             }
+        }
+        
+        for (const handler of this.messageHandlers) {
+            handler(msg);
         }
     }
 
@@ -68,8 +84,6 @@ export class dbusIO {
             this.pendingCalls.set(serial, { resolve, reject });
 
             const data = message.encode();
-            console.log("sending dbus message, len:", data.byteLength);
-            console.log("data hex:", Buffer.from(data).toString("hex"));
             this.socket.write(Buffer.from(data));
 
             setTimeout(() => {
@@ -81,11 +95,16 @@ export class dbusIO {
         });
     }
 
-    async emit(message: dbusMessage): Promise<void> {
-        message.setType(MessageType.Signal);
-        message.setSerial(this.nextSerial());
-
+    async send(message: dbusMessage): Promise<void> {
+        if (!message.getSerial()) {
+            message.setSerial(this.nextSerial());
+        }
         const data = message.encode();
         this.socket.write(Buffer.from(data));
+    }
+
+    async emit(message: dbusMessage): Promise<void> {
+        message.setType(MessageType.Signal);
+        return this.send(message);
     }
 }

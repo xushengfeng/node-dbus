@@ -6,7 +6,7 @@ import {
 	Endian,
 	HeaderFieldCode,
 	MessageType,
-} from "../src/dbus_index";
+} from "../src/";
 
 describe("Codec", () => {
 	it("should write and read byte", () => {
