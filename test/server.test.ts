@@ -11,7 +11,6 @@ import { dbusMessage } from "../src/message";
 
 const SOCKET_PATH = path.join(__dirname, "test-server-bus.sock");
 
-
 describe("D-Bus Server and Client Integration", () => {
 	let clientSocket: USocket;
 	let serverSocket: USocket;
@@ -46,7 +45,6 @@ describe("D-Bus Server and Client Integration", () => {
 		serverIO = new dbusIO({ socket: serverSocket });
 		await serverIO.connect();
 
-
 		// Connect Client
 		clientSocket = new mus.USocket();
 		await new Promise<void>((resolve, reject) => {
@@ -56,10 +54,9 @@ describe("D-Bus Server and Client Integration", () => {
 		clientIO = new dbusIO({ socket: clientSocket });
 		await clientIO.connect();
 
-
-        // Initialize Server
-        server = new dbusServer(serverIO, "com.example.TestServer");
-        await server.init();
+		// Initialize Server
+		server = new dbusServer(serverIO, "com.example.TestServer");
+		await server.init();
 	});
 
 	afterAll(() => {
@@ -74,61 +71,75 @@ describe("D-Bus Server and Client Integration", () => {
 	});
 
 	it("should serve methods and respond to client calls", async () => {
-        // Expose a method on the server
-        server.addObject("/com/example/TestObject", "com.example.TestInterface", {
-            Echo: (text: string) => {
-                return text;
-            },
-            Add: (a: number, b: number) => {
-                return a + b;
-            },
-            ReturnDict: () => {
-                return { signature: "a{sv}", values: [[
-                    [{ signature: "s", value: "key1" }, { signature: "v", value: { signature: "s", value: "value1" } }]
-                ]]};
-            }
-        });
+		// Expose a method on the server
+		server.addObject("/com/example/TestObject", "com.example.TestInterface", {
+			Echo: (text: string) => {
+				return text;
+			},
+			Add: (a: number, b: number) => {
+				return a + b;
+			},
+			ReturnDict: () => {
+				return {
+					signature: "a{sv}",
+					values: [
+						[
+							[
+								{ signature: "s", value: "key1" },
+								{ signature: "v", value: { signature: "s", value: "value1" } },
+							],
+						],
+					],
+				};
+			},
+		});
 
-        const client = new dbusClient({ io: clientIO });
-        const service = await client.getService("com.example.TestServer");
-        const obj = await service.getObject("/com/example/TestObject");
-        const iface = await obj.getInterface("com.example.TestInterface");
+		const client = new dbusClient({ io: clientIO });
+		const service = await client.getService("com.example.TestServer");
+		const obj = await service.getObject("/com/example/TestObject");
+		const iface = await obj.getInterface("com.example.TestInterface");
 
-        // Test Echo
-        const echoRes = await iface.call("Echo", "s", "hello world");
-        expect(echoRes.getBody()[0]).toBe("hello world");
+		// Test Echo
+		const echoRes = await iface.call("Echo", "s", "hello world");
+		expect(echoRes.getBody()[0]).toBe("hello world");
 
-        // Test Add
-        const addRes = await iface.call("Add", "ii", 5, 7);
-        expect(addRes.getBody()[0]).toBe(12);
+		// Test Add
+		const addRes = await iface.call("Add", "ii", 5, 7);
+		expect(addRes.getBody()[0]).toBe(12);
 
-        // Test Unknown Method
-        try {
-            await iface.call("UnknownMethod", "");
-            expect(true).toBe(false); // should not reach here
-        } catch (e: any) {
-            expect(e.message).toContain("UnknownMethod");
-        }
+		// Test Unknown Method
+		try {
+			await iface.call("UnknownMethod", "");
+			expect(true).toBe(false); // should not reach here
+		} catch (e: any) {
+			expect(e.message).toContain("UnknownMethod");
+		}
 	});
 
-    it("should emit and receive signals", async () => {
-        const client = new dbusClient({ io: clientIO });
-        const service = await client.getService("com.example.TestServer");
-        const obj = await service.getObject("/com/example/TestObject");
-        const iface = await obj.getInterface("com.example.TestInterface");
+	it("should emit and receive signals", async () => {
+		const client = new dbusClient({ io: clientIO });
+		const service = await client.getService("com.example.TestServer");
+		const obj = await service.getObject("/com/example/TestObject");
+		const iface = await obj.getInterface("com.example.TestInterface");
 
-        const signalPromise = new Promise<string>((resolve) => {
-            iface.on("TestSignal", (text: unknown) => {
-                resolve(text as string);
-            });
-        });
+		const signalPromise = new Promise<string>((resolve) => {
+			iface.on("TestSignal", (text: unknown) => {
+				resolve(text as string);
+			});
+		});
 
-        // Emit from server
-        setTimeout(() => {
-            server.emitSignal("/com/example/TestObject", "com.example.TestInterface", "TestSignal", "s", ["signal_data"]);
-        }, 100);
+		// Emit from server
+		setTimeout(() => {
+			server.emitSignal(
+				"/com/example/TestObject",
+				"com.example.TestInterface",
+				"TestSignal",
+				"s",
+				["signal_data"],
+			);
+		}, 100);
 
-        const data = await signalPromise;
-        expect(data).toBe("signal_data");
-    });
+		const data = await signalPromise;
+		expect(data).toBe("signal_data");
+	});
 });
