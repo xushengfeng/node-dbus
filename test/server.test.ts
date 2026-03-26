@@ -82,7 +82,7 @@ describe("D-Bus Server and Client Integration", () => {
 			ReturnDict: () => {
 				return {
 					signature: "a{sv}",
-					values: [
+					value: [
 						[
 							[
 								{ signature: "s", value: "key1" },

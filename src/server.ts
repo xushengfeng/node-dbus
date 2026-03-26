@@ -3,7 +3,17 @@ import type { dbusIO } from "./dbus";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
-export type ServerMethodHandler = (...args: any[]) => any;
+type MayPromise<T> = Promise<T> | T;
+export type ServerMethodHandler = (...args: any[]) => MayPromise<
+	| {
+			signature: string;
+			value: any;
+	  }
+	| string
+	| number
+	| boolean
+	| undefined
+>;
 
 export class dbusServer {
 	private io: dbusIO;
@@ -133,21 +143,15 @@ export class dbusServer {
 			reply.setDestination(sender);
 
 			if (result !== undefined) {
-				if (
-					result &&
-					typeof result === "object" &&
-					"signature" in result &&
-					"values" in result &&
-					Array.isArray(result.values)
-				) {
-					reply.setSignature(result.signature);
-					reply.setBody(result.values);
-				} else if (Array.isArray(result)) {
-					// It's dangerous without a signature, but let's allow it if user provides an empty one? No, we shouldn't guess array elements easily.
-					// We'll require `{ signature, values }` for complex types.
-					reply.setBody(result);
+				if (typeof result === "object") {
+					if (Array.isArray(result.value)) {
+						reply.setSignature(result.signature);
+						reply.setBody(result.value);
+					} else {
+						reply.setBody([result.value]);
+						reply.setSignature(result.signature);
+					}
 				} else {
-					reply.setBody([result]);
 					if (typeof result === "string") reply.setSignature("s");
 					else if (typeof result === "number") reply.setSignature("i");
 					else if (typeof result === "boolean") reply.setSignature("b");
