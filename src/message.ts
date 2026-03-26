@@ -1,4 +1,4 @@
-import { Codec, Decoder } from "./codec";
+import { Codec, Decoder, splitSignature } from "./codec";
 import {
 	align,
 	Endian,
@@ -7,7 +7,6 @@ import {
 	type Message,
 	MessageType,
 } from "./types";
-import { splitSignature } from "./signature";
 
 export class dbusMessage {
 	private message: Message;

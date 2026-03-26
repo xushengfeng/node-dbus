@@ -3,6 +3,81 @@ import { align, Endian } from "./types";
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8");
 
+export function splitSignature(sig: string): string[] {
+	const result: string[] = [];
+	let i = 0;
+	while (i < sig.length) {
+		let start = i;
+		if (sig[i] === "a") {
+			while (sig[i] === "a") {
+				i++;
+			}
+			if (sig[i] === "{" || sig[i] === "(") {
+				let depth = 0;
+				let startChar = sig[i];
+				let endChar = startChar === "{" ? "}" : ")";
+				for (let k = i; k < sig.length; k++) {
+					if (sig[k] === startChar) depth++;
+					else if (sig[k] === endChar) depth--;
+					if (depth === 0) {
+						i = k + 1;
+						result.push(sig.substring(start, i));
+						break;
+					}
+				}
+			} else {
+				result.push(sig.substring(start, i + 1));
+				i++;
+			}
+		} else if (sig[i] === "{" || sig[i] === "(") {
+			let depth = 0;
+			let startChar = sig[i];
+			let endChar = startChar === "{" ? "}" : ")";
+			for (let k = i; k < sig.length; k++) {
+				if (sig[k] === startChar) depth++;
+				else if (sig[k] === endChar) depth--;
+				if (depth === 0) {
+					result.push(sig.substring(i, k + 1));
+					i = k + 1;
+					break;
+				}
+			}
+		} else {
+			result.push(sig[i]);
+			i++;
+		}
+	}
+	return result;
+}
+
+export function getAlignment(sig: string): number {
+	if (sig.startsWith("a")) return 4;
+	switch (sig[0]) {
+		case "y":
+		case "g":
+		case "v":
+			return 1;
+		case "n":
+		case "q":
+			return 2;
+		case "b":
+		case "i":
+		case "u":
+		case "s":
+		case "o":
+			return 4;
+		case "x":
+		case "t":
+		case "d":
+		case "r":
+		case "{":
+		case "(":
+			return 8;
+		default:
+			return 1;
+	}
+}
+
 export class Codec {
 	private buffer: ArrayBuffer;
 	private view: DataView;
@@ -214,48 +289,43 @@ export class Codec {
 					const arrayCodec = new Codec(this.endian);
 
 					for (const elem of arr) {
-						if (elemSig === "t" || elemSig === "d" || elemSig.startsWith("r")) {
-							arrayCodec.offset += align(arrayCodec.offset, 8);
-						} else if (
-							elemSig === "i" ||
-							elemSig === "u" ||
-							elemSig === "s" ||
-							elemSig === "o" ||
-							elemSig === "g" ||
-							elemSig === "v" ||
-							elemSig.startsWith("a")
-						) {
-							arrayCodec.offset += align(arrayCodec.offset, 4);
-						} else if (elemSig === "n" || elemSig === "q") {
-							arrayCodec.offset += align(arrayCodec.offset, 2);
-						}
+						arrayCodec.offset += align(
+							arrayCodec.offset,
+							getAlignment(elemSig),
+						);
 						arrayCodec.writeValue(elem, elemSig);
 					}
 
 					const arrayData = arrayCodec.toUint8Array();
 					this.writeUint32(arrayData.length);
 
-					if (elemSig === "t" || elemSig === "d" || elemSig.startsWith("r")) {
-						this.offset += align(this.offset, 8);
-					} else if (
-						elemSig === "i" ||
-						elemSig === "u" ||
-						elemSig === "s" ||
-						elemSig === "o" ||
-						elemSig === "g" ||
-						elemSig === "v" ||
-						elemSig.startsWith("a")
-					) {
-						this.offset += align(this.offset, 4);
-					} else if (elemSig === "n" || elemSig === "q") {
-						this.offset += align(this.offset, 2);
-					}
+					this.offset += align(this.offset, getAlignment(elemSig));
 
 					this.ensureCapacity(arrayData.length);
 					new Uint8Array(this.buffer, this.offset, arrayData.length).set(
 						arrayData,
 					);
 					this.offset += arrayData.length;
+					break;
+				} else if (signature.startsWith("(") && signature.endsWith(")")) {
+					this.offset += align(this.offset, 8);
+					const fields = splitSignature(
+						signature.substring(1, signature.length - 1),
+					);
+					const arr = value as unknown[];
+					for (let i = 0; i < fields.length; i++) {
+						this.writeValue(arr[i], fields[i]);
+					}
+					break;
+				} else if (signature.startsWith("{") && signature.endsWith("}")) {
+					this.offset += align(this.offset, 8);
+					const fields = splitSignature(
+						signature.substring(1, signature.length - 1),
+					);
+					const arr = value as unknown[];
+					for (let i = 0; i < fields.length; i++) {
+						this.writeValue(arr[i], fields[i]);
+					}
 					break;
 				}
 				throw new Error(`Unsupported signature: ${signature}`);
@@ -436,21 +506,7 @@ export class Decoder {
 					const elemSig = signature.substring(1);
 					const length = this.readUint32();
 					// Array elements might need alignment
-					if (elemSig === "t" || elemSig === "d" || elemSig.startsWith("r")) {
-						this.offset += align(this.offset, 8);
-					} else if (
-						elemSig === "i" ||
-						elemSig === "u" ||
-						elemSig === "s" ||
-						elemSig === "o" ||
-						elemSig === "g" ||
-						elemSig === "v" ||
-						elemSig.startsWith("a")
-					) {
-						this.offset += align(this.offset, 4);
-					} else if (elemSig === "n" || elemSig === "q") {
-						this.offset += align(this.offset, 2);
-					}
+					this.offset += align(this.offset, getAlignment(elemSig));
 
 					const startOffset = this.offset;
 					const arr: unknown[] = [];
@@ -462,6 +518,26 @@ export class Decoder {
 					}
 					// Ensure we skip exactly length bytes even if misread
 					this.offset = startOffset + length;
+					return arr;
+				} else if (signature.startsWith("(") && signature.endsWith(")")) {
+					this.offset += align(this.offset, 8);
+					const fields = splitSignature(
+						signature.substring(1, signature.length - 1),
+					);
+					const arr: unknown[] = [];
+					for (let i = 0; i < fields.length; i++) {
+						arr.push(this.readValue(fields[i]));
+					}
+					return arr;
+				} else if (signature.startsWith("{") && signature.endsWith("}")) {
+					this.offset += align(this.offset, 8);
+					const fields = splitSignature(
+						signature.substring(1, signature.length - 1),
+					);
+					const arr: unknown[] = [];
+					for (let i = 0; i < fields.length; i++) {
+						arr.push(this.readValue(fields[i]));
+					}
 					return arr;
 				}
 				throw new Error(`Unsupported signature: ${signature}`);

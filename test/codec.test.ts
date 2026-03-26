@@ -175,4 +175,40 @@ describe("dbusMessage", () => {
 
 		expect(decoded.getBody()).toEqual(["Hello", 123]);
 	});
+
+	it("should write and read dict entries {sv}", () => {
+		const codec = new Codec();
+		codec.writeValue(["name", { signature: "s", value: "test" }], "{sv}");
+		const decoder = new Decoder(codec.toUint8Array());
+		expect(decoder.readValue("{sv}")).toEqual([
+			"name",
+			{ signature: "s", value: "test" },
+		]);
+	});
+
+	it("should write and read complex nested struct and array (isa{sv})", () => {
+		const codec = new Codec();
+		const data = [
+			42,
+			"hello",
+			[
+				["key1", { signature: "s", value: "value1" }],
+				["key2", { signature: "i", value: 100 }],
+			],
+		];
+		codec.writeValue(data, "(isa{sv})");
+		const decoder = new Decoder(codec.toUint8Array());
+		expect(decoder.readValue("(isa{sv})")).toEqual(data);
+	});
+
+	it("should write and read array of dicts a{sv}", () => {
+		const codec = new Codec();
+		const data = [
+			["prop1", { signature: "s", value: "val1" }],
+			["prop2", { signature: "i", value: 42 }],
+		];
+		codec.writeValue(data, "a{sv}");
+		const decoder = new Decoder(codec.toUint8Array());
+		expect(decoder.readValue("a{sv}")).toEqual(data);
+	});
 });
