@@ -23,6 +23,14 @@ export class dbusIO {
         await authenticate(this.socket);
         this.setupReadHandler();
         this.isConnected = true;
+
+        // Automatically call Hello to register with the bus
+        const helloMsg = new dbusMessage();
+        helloMsg.setDestination("org.freedesktop.DBus");
+        helloMsg.setPath("/org/freedesktop/DBus");
+        helloMsg.setInterface("org.freedesktop.DBus");
+        helloMsg.setMember("Hello");
+        await this.call(helloMsg);
     }
 
     addMessageHandler(handler: (msg: dbusMessage) => void): void {

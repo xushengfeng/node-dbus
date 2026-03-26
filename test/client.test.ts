@@ -10,7 +10,6 @@ import { dbusMessage } from "../src/message";
 
 const SOCKET_PATH = path.join(__dirname, "test-bus.sock");
 
-
 describe("D-Bus Client Integration", () => {
 	let socket: USocket;
 	let io: dbusIO;
@@ -44,15 +43,6 @@ describe("D-Bus Client Integration", () => {
 
 		io = new dbusIO({ socket });
 		await io.connect();
-
-		// Call Hello to register with the bus
-		await new Promise(r => setTimeout(r, 100));
-		const helloMsg = new dbusMessage();
-		helloMsg.setDestination("org.freedesktop.DBus");
-		helloMsg.setPath("/org/freedesktop/DBus");
-		helloMsg.setInterface("org.freedesktop.DBus");
-		helloMsg.setMember("Hello");
-		await io.call(helloMsg);
 	});
 
 	afterAll(() => {
@@ -105,7 +95,10 @@ describe("D-Bus Client Integration", () => {
 		const obj = await service.getObject("/org/freedesktop/DBus");
 		const iface = await obj.getInterface("org.freedesktop.DBus");
 
-		const features = await iface.get("Features") as { signature: string, value: string[] };
+		const features = (await iface.get("Features")) as {
+			signature: string;
+			value: string[];
+		};
 		expect(Array.isArray(features.value)).toBe(true);
 	});
 });

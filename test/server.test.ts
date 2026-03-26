@@ -46,13 +46,6 @@ describe("D-Bus Server and Client Integration", () => {
 		serverIO = new dbusIO({ socket: serverSocket });
 		await serverIO.connect();
 
-		// Register with bus
-		const helloMsg1 = new dbusMessage();
-		helloMsg1.setDestination("org.freedesktop.DBus");
-		helloMsg1.setPath("/org/freedesktop/DBus");
-		helloMsg1.setInterface("org.freedesktop.DBus");
-		helloMsg1.setMember("Hello");
-		await serverIO.call(helloMsg1);
 
 		// Connect Client
 		clientSocket = new mus.USocket();
@@ -63,13 +56,6 @@ describe("D-Bus Server and Client Integration", () => {
 		clientIO = new dbusIO({ socket: clientSocket });
 		await clientIO.connect();
 
-		// Register with bus
-		const helloMsg2 = new dbusMessage();
-		helloMsg2.setDestination("org.freedesktop.DBus");
-		helloMsg2.setPath("/org/freedesktop/DBus");
-		helloMsg2.setInterface("org.freedesktop.DBus");
-		helloMsg2.setMember("Hello");
-		await clientIO.call(helloMsg2);
 
         // Initialize Server
         server = new dbusServer(serverIO, "com.example.TestServer");
