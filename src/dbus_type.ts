@@ -1,6 +1,9 @@
 // ==================== 自定义容器类型 ====================
-export type DbusDict<K, V> = [K, V];
-export type DbusVar<T = unknown> = T;
+export type DbusDict<K, V> = [K, V][];
+export type DbusVar<T extends string> = {
+	signature: T;
+	value: DBusType<T>;
+};
 
 // ==================== 类型映射核心 ====================
 interface DBusBasicMap {
@@ -21,7 +24,7 @@ interface DBusBasicMap {
 type ParseNext<S extends string> = S extends ""
 	? never
 	: S extends `v${infer Rest}`
-		? [DbusVar<unknown>, Rest]
+		? [DbusVar<string>, Rest]
 		: S extends `a{${infer Rest}`
 			? ParseDictEntry<Rest> extends [infer K, infer V, infer DictRest]
 				? [DbusDict<K, V>, DictRest]
