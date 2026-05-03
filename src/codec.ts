@@ -4,6 +4,13 @@ import { align, Endian } from "./types";
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8");
 
+export function dbusVariant<T extends string>(
+	signature: T,
+	value: DBusType<T>,
+): { signature: T; value: DBusType<T> } {
+	return { signature, value };
+}
+
 export function splitSignature(sig: string): string[] {
 	const result: string[] = [];
 	let i = 0;

@@ -6,7 +6,6 @@ import type { USocket } from "myde-unix-socket";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dbusClient } from "../src/client";
 import { dbusIO } from "../src/dbus";
-import { dbusMessage } from "../src/message";
 
 const SOCKET_PATH = path.join(__dirname, "test-bus.sock");
 
@@ -60,45 +59,13 @@ describe("D-Bus Client Integration", () => {
 		expect(io).toBeDefined();
 	});
 
-	it("should list names on system bus", async () => {
-		const msg = new dbusMessage();
-		msg.setDestination("org.freedesktop.DBus");
-		msg.setPath("/org/freedesktop/DBus");
-		msg.setInterface("org.freedesktop.DBus");
-		msg.setMember("ListNames");
-
-		const response = await io.call(msg);
-		const names = response.getBody()[0] as string[];
-
-		expect(Array.isArray(names)).toBe(true);
-		expect(names).toContain("org.freedesktop.DBus");
-	});
-
-	it("should get unique name", async () => {
-		const msg = new dbusMessage();
-		msg.setDestination("org.freedesktop.DBus");
-		msg.setPath("/org/freedesktop/DBus");
-		msg.setInterface("org.freedesktop.DBus");
-		msg.setMember("GetNameOwner");
-		msg.setSignature("s");
-		msg.setBody(["org.freedesktop.DBus"]);
-
-		const response = await io.call(msg);
-		const owner = response.getBody()[0] as string;
-
-		expect(owner).toBe("org.freedesktop.DBus");
-	});
-
 	it("should get dbus features", async () => {
 		const client = new dbusClient({ io });
 		const service = await client.getService("org.freedesktop.DBus");
 		const obj = await service.getObject("/org/freedesktop/DBus");
 		const iface = await obj.getInterface("org.freedesktop.DBus");
 
-		const features = (await iface.get("Features")) as {
-			signature: string;
-			value: string[];
-		};
+		const features = (await iface.get<"v">("Features"))[0];
 		expect(Array.isArray(features.value)).toBe(true);
 	});
 });

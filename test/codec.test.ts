@@ -306,4 +306,15 @@ describe("dbusMessage", () => {
 
 		expect(decoded.getBody()).toEqual(["Hello", 123]);
 	});
+
+	it("body", () => {
+		const msg = new dbusMessage();
+		msg.setSignature("s");
+		msg.setBody(["Hello"]);
+		expect(msg.getBody()).toEqual(["Hello"]);
+		const msg2 = new dbusMessage();
+		msg2.setSignature("(s)");
+		msg2.setBody([["Hello"]]);
+		expect(msg2.getBody()).toEqual([["Hello"]]);
+	});
 });

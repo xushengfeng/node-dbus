@@ -32,7 +32,7 @@ export class dbusServer {
 		const service = await client.getService("org.freedesktop.DBus");
 		const obj = await service.getObject("/org/freedesktop/DBus");
 		this.iface = await obj.getInterface("org.freedesktop.DBus");
-		await this.iface.call("RequestName", "su", this.name, 0);
+		await this.iface.call("RequestName", "su", this.name, 0).await();
 
 		this.io.addMessageHandler(this.handleMessage.bind(this));
 	}

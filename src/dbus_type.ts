@@ -64,3 +64,8 @@ type ParseDictEntry<S extends string> = S extends `${infer K}${infer Rest}`
 
 export type DBusType<T extends string> =
 	ParseNext<T> extends [infer Type, ""] ? Type : never;
+
+// 补上括号形成了类似结构体，但不是协议的结构体，而是方便信息处理的array
+// 规定比如 ii 是一个包含两个number的类型组，看起来外部编码了结构体，实际上并没有编码
+// 或者可以理解为有个原始概念 组，配合括号就是结构体
+export type DBusTypes<T extends string> = DBusType<`(${T})`>;

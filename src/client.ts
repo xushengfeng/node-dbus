@@ -1,4 +1,5 @@
 import type { dbusIO } from "./dbus";
+import type { DBusTypes } from "./dbus_type";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
@@ -47,11 +48,12 @@ export class dbusInterface {
 		this.io = op.io;
 	}
 
-	async call(
+	call<T extends string = "">(
 		method: string,
-		signature: string = "",
-		...args: unknown[]
-	): Promise<dbusMessage> {
+		signature: T = "" as T,
+		// @ts-expect-error
+		...args: DBusTypes<T>
+	) {
 		const msg = new dbusMessage();
 		msg.setDestination(this.op.destination);
 		msg.setPath(this.op.path);
@@ -59,12 +61,24 @@ export class dbusInterface {
 		msg.setMember(method);
 		if (signature) {
 			msg.setSignature(signature);
+			// @ts-expect-error
 			msg.setBody(args);
 		}
-		return this.io.call(msg);
+		const r = this.io.call(msg);
+
+		return {
+			async await() {
+				await r;
+			},
+			async as<R extends string>(): Promise<DBusTypes<R>> {
+				const response = await r;
+				const body = response.getBody();
+				return body as DBusTypes<R>;
+			},
+		};
 	}
 
-	async get(property: string): Promise<unknown> {
+	async get<T extends string>(property: string): Promise<DBusTypes<T>> {
 		const msg = new dbusMessage();
 		msg.setDestination(this.op.destination);
 		msg.setPath(this.op.path);
@@ -74,13 +88,13 @@ export class dbusInterface {
 		msg.setBody([this.op.interface, property]);
 
 		const response = await this.io.call(msg);
-		return response.getBody()[0];
+		return response.getBody() as DBusTypes<T>;
 	}
 
-	async set(
+	async set<T extends string>(
 		property: string,
-		value: unknown,
-		signature: string,
+		value: DBusTypes<T>,
+		signature: T,
 	): Promise<void> {
 		const msg = new dbusMessage();
 		msg.setDestination(this.op.destination);
@@ -101,13 +115,18 @@ export class dbusInterface {
 		msg.setSignature("s");
 		msg.setBody([this.op.interface]);
 		const response = await this.io.call(msg);
-		return response.getBody()[0] as Record<string, unknown>;
+		const b = response.getBody() as DBusTypes<"a{sv}">;
+		const result: Record<string, unknown> = {};
+		for (const [k, v] of b[0]) {
+			result[k] = v;
+		}
+		return result;
 	}
 
-	async on(
+	async on<T extends string>(
 		signal: string,
-		// biome-ignore lint/suspicious/noExplicitAny: cb
-		callback: (...args: any[]) => void,
+		// @ts-expect-error
+		callback: (...args: DBusTypes<T>) => void,
 	): Promise<() => void> {
 		const rule = `type='signal',sender='${this.op.destination}',interface='${this.op.interface}',member='${signal}',path='${this.op.path}'`;
 
@@ -128,6 +147,7 @@ export class dbusInterface {
 				m.getInterface() === this.op.interface &&
 				m.getMember() === signal
 			) {
+				// @ts-expect-error
 				callback(...m.getBody());
 			}
 		};
