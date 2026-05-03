@@ -106,7 +106,8 @@ export class dbusInterface {
 
 	async on(
 		signal: string,
-		callback: (...args: unknown[]) => void,
+		// biome-ignore lint/suspicious/noExplicitAny: cb
+		callback: (...args: any[]) => void,
 	): Promise<() => void> {
 		const rule = `type='signal',sender='${this.op.destination}',interface='${this.op.interface}',member='${signal}',path='${this.op.path}'`;
 
