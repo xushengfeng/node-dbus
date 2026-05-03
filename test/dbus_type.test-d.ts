@@ -26,14 +26,14 @@ expectTypeOf<DBusType<"((i((is)))s)">>().toEqualTypeOf<
 	[[number, [[number, string]]], string]
 >();
 
-expectTypeOf<DBusType<"as">>().toEqualTypeOf<string[]>();
-expectTypeOf<DBusType<"a(is)">>().toEqualTypeOf<[number, string][]>();
+expectTypeOf<DBusType<"as">>().toEqualTypeOf<Array<string>>();
+expectTypeOf<DBusType<"a(is)">>().toEqualTypeOf<Array<[number, string]>>();
 expectTypeOf<DBusType<"a(i(is))">>().toEqualTypeOf<
-	[number, [number, string]][]
+	Array<[number, [number, string]]>
 >();
 
 expectTypeOf<DBusType<"a{sv}">>().toEqualTypeOf<
-	Record<string, DbusVar<unknown>>
+	DbusDict<string, DbusVar<unknown>>
 >();
 expectTypeOf<DBusType<"a{is}">>().toEqualTypeOf<DbusDict<number, string>>();
 expectTypeOf<DBusType<"a{xv}">>().toEqualTypeOf<
@@ -41,8 +41,18 @@ expectTypeOf<DBusType<"a{xv}">>().toEqualTypeOf<
 >();
 
 expectTypeOf<DBusType<"a{sa{sv}}">>().toEqualTypeOf<
-	Record<string, Record<string, DbusVar<unknown>>>
+	DbusDict<string, DbusDict<string, DbusVar<unknown>>>
 >();
 expectTypeOf<DBusType<"a{ia{sv}}">>().toEqualTypeOf<
-	DbusDict<number, Record<string, DbusVar<unknown>>>
+	DbusDict<number, DbusDict<string, DbusVar<unknown>>>
+>();
+
+expectTypeOf<DBusType<"(isa{sv})">>().toEqualTypeOf<
+	[number, string, DbusDict<string, DbusVar<unknown>>]
+>();
+expectTypeOf<DBusType<"a(a{sv})">>().toEqualTypeOf<
+	Array<[DbusDict<string, DbusVar<unknown>>]>
+>();
+expectTypeOf<DBusType<"a{s(sib)}">>().toEqualTypeOf<
+	DbusDict<string, [string, number, boolean]>
 >();
