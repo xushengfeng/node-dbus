@@ -1,13 +1,12 @@
-import { ChildProcess, spawn } from "child_process";
+import { type ChildProcess, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 const mus = require("myde-unix-socket") as typeof import("myde-unix-socket");
 import type { USocket } from "myde-unix-socket";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dbusClient } from "../src/client";
-import { dbusServer } from "../src/server";
+import { dbusServer, serverReturn } from "../src/server";
 import { dbusIO } from "../src/dbus";
-import { dbusMessage } from "../src/message";
 
 const SOCKET_PATH = path.join(__dirname, "test-server-bus.sock");
 
@@ -74,23 +73,16 @@ describe("D-Bus Server and Client Integration", () => {
 		// Expose a method on the server
 		server.addObject("/com/example/TestObject", "com.example.TestInterface", {
 			Echo: (text: string) => {
-				return text;
+				return serverReturn("s", text);
 			},
 			Add: (a: number, b: number) => {
-				return a + b;
+				return serverReturn("i", a + b);
 			},
 			ReturnDict: () => {
-				return {
-					signature: "a{sv}",
-					value: [
-						[
-							[
-								{ signature: "s", value: "key1" },
-								{ signature: "v", value: { signature: "s", value: "value1" } },
-							],
-						],
-					],
-				};
+				// @ts-expect-error
+				return serverReturn("a{sv}", [
+					["key1", { signature: "s", value: "value1" }],
+				]);
 			},
 		});
 
@@ -99,17 +91,33 @@ describe("D-Bus Server and Client Integration", () => {
 		const obj = await service.getObject("/com/example/TestObject");
 		const iface = await obj.getInterface("com.example.TestInterface");
 
+		// Test ReturnDict
+		const [dictRes] = await iface.call("ReturnDict").as<"a{sv}">();
+		expect(dictRes).toEqual([
+			[
+				"key1",
+				{
+					signature: "s",
+					value: "value1",
+				},
+			],
+		]);
+
 		// Test Echo
-		const echoRes = await iface.call("Echo", "s", "hello world");
-		expect(echoRes.getBody()[0]).toBe("hello world");
+		const [echoRes] = await iface.call("Echo", "s", "hello world").as<"s">();
+		expect(echoRes).toBe("hello world");
+
+		console.log("ccc");
 
 		// Test Add
-		const addRes = await iface.call("Add", "ii", 5, 7);
-		expect(addRes.getBody()[0]).toBe(12);
+		const [addRes] = await iface.call("Add", "ii", 5, 7).as<"i">();
+		expect(addRes).toBe(12);
+
+		console.log("aaa");
 
 		// Test Unknown Method
 		try {
-			await iface.call("UnknownMethod", "");
+			await iface.call("UnknownMethod", "").await();
 			expect(true).toBe(false); // should not reach here
 		} catch (e: any) {
 			expect(e.message).toContain("UnknownMethod");
@@ -123,8 +131,8 @@ describe("D-Bus Server and Client Integration", () => {
 		const iface = await obj.getInterface("com.example.TestInterface");
 
 		const signalPromise = new Promise<string>((resolve) => {
-			iface.on("TestSignal", (text: unknown) => {
-				resolve(text as string);
+			iface.on<"s">("TestSignal", (text) => {
+				resolve(text);
 			});
 		});
 

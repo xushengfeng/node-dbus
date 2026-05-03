@@ -1,5 +1,6 @@
 import { dbusClient, type dbusInterface } from "./client";
 import type { dbusIO } from "./dbus";
+import type { DBusTypes } from "./dbus_type";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
@@ -9,11 +10,16 @@ export type ServerMethodHandler = (...args: any[]) => MayPromise<
 			signature: string;
 			value: any;
 	  }
-	| string
-	| number
-	| boolean
 	| undefined
 >;
+
+export function serverReturn<T extends string>(
+	signature: T,
+	// @ts-expect-error
+	...args: DBusTypes<T>
+) {
+	return { signature, value: args };
+}
 
 export class dbusServer {
 	private io: dbusIO;
@@ -143,19 +149,8 @@ export class dbusServer {
 			reply.setDestination(sender);
 
 			if (result !== undefined) {
-				if (typeof result === "object") {
-					if (Array.isArray(result.value)) {
-						reply.setSignature(result.signature);
-						reply.setBody(result.value);
-					} else {
-						reply.setBody([result.value]);
-						reply.setSignature(result.signature);
-					}
-				} else {
-					if (typeof result === "string") reply.setSignature("s");
-					else if (typeof result === "number") reply.setSignature("i");
-					else if (typeof result === "boolean") reply.setSignature("b");
-				}
+				reply.setSignature(result.signature);
+				reply.setBody(result.value);
 			}
 
 			await this.io.send(reply);
