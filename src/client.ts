@@ -18,6 +18,13 @@ export class dbusClient {
 	async getService(name: string) {
 		return new dbusService({ ...this.op, destination: name });
 	}
+	async getMetaInterface() {
+		const obj = await (await this.getService("org.freedesktop.DBus")).getObject(
+			"/org/freedesktop/DBus",
+		);
+		const iface = await obj.getInterface("org.freedesktop.DBus");
+		return new dbusMetaInterface(iface);
+	}
 }
 
 export class dbusService {
@@ -232,5 +239,95 @@ export class dbusMetaInterface {
 	private iface: dbusInterface;
 	constructor(iface: dbusInterface) {
 		this.iface = iface;
+	}
+	async Hello() {
+		return await this.iface.call("Hello").as<"s">();
+	}
+	async RequestName(name: string, flags: number) {
+		return await this.iface.call("RequestName", "su", name, flags).as<"u">();
+	}
+	async ReleaseName(name: string) {
+		return await this.iface.call("ReleaseName", "s", name).as<"u">();
+	}
+	async ListQueuedOwners(name: string) {
+		return await this.iface.call("ListQueuedOwners", "s", name).as<"as">();
+	}
+	async ListNames() {
+		return await this.iface.call("ListNames").as<"as">();
+	}
+	async ListActivatableNames() {
+		return await this.iface.call("ListActivatableNames").as<"as">();
+	}
+	async NameHasOwner(name: string) {
+		return await this.iface.call("NameHasOwner", "s", name).as<"b">();
+	}
+	async onNameOwnerChanged(
+		callback: (name: string, oldOwner: string, newOwner: string) => void,
+	): Promise<() => void> {
+		return this.iface.on<"sss">("NameOwnerChanged", callback);
+	}
+	async onNameLost(callback: (name: string) => void): Promise<() => void> {
+		return this.iface.on<"s">("NameLost", callback);
+	}
+	async onNameAcquired(callback: (name: string) => void): Promise<() => void> {
+		return this.iface.on<"s">("NameAcquired", callback);
+	}
+	async onActivatableServicesChanged(
+		callback: () => void,
+	): Promise<() => void> {
+		return this.iface.on("ActivatableServicesChanged", () => {
+			callback();
+		});
+	}
+	async StartServiceByName(name: string, flags: number) {
+		return await this.iface
+			.call("StartServiceByName", "su", name, flags)
+			.as<"u">();
+	}
+	async UpdateActivationEnvironment(environment: Record<string, string>) {
+		const envArray = Object.entries(environment).map(
+			([k, v]) => [k, v] as [string, string],
+		);
+		await this.iface
+			.call("UpdateActivationEnvironment", "a{ss}", envArray)
+			.await();
+	}
+	async GetNameOwner(name: string) {
+		return await this.iface.call("GetNameOwner", "s", name).as<"s">();
+	}
+	async GetConnectionUnixUser(name: string) {
+		return await this.iface.call("GetConnectionUnixUser", "s", name).as<"u">();
+	}
+	async GetConnectionUnixProcessID(name: string) {
+		return await this.iface
+			.call("GetConnectionUnixProcessID", "s", name)
+			.as<"u">();
+	}
+	async GetConnectionCredentials(name: string) {
+		return await this.iface
+			.call("GetConnectionCredentials", "s", name)
+			.as<"a{sv}">();
+	}
+	async GetAdtAuditSessionData(name: string) {
+		return await this.iface
+			.call("GetAdtAuditSessionData", "s", name)
+			.as<"a{sv}">();
+	}
+	async GetConnectionSELinuxSecurityContext(name: string) {
+		return await this.iface
+			.call("GetConnectionSELinuxSecurityContext", "s", name)
+			.as<"ay">();
+	}
+	async AddMatch(matchRule: string) {
+		await this.iface.call("AddMatch", "s", matchRule).await();
+	}
+	async RemoveMatch(matchRule: string) {
+		await this.iface.call("RemoveMatch", "s", matchRule).await();
+	}
+	async GetId() {
+		return await this.iface.call("GetId").as<"s">();
+	}
+	async Features() {
+		return await this.iface.call("Features").as<"as">();
 	}
 }
