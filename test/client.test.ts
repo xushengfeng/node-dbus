@@ -26,7 +26,7 @@ describe("D-Bus Client Integration", () => {
 		]);
 
 		await new Promise<void>((resolve, reject) => {
-			daemon.stdout?.on("data", (data) => {
+			daemon.stdout?.on("data", () => {
 				resolve();
 			});
 			daemon.on("error", reject);

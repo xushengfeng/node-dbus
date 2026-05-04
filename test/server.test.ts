@@ -79,8 +79,7 @@ describe("D-Bus Server and Client Integration", () => {
 				return serverReturn("i", a + b);
 			},
 			ReturnDict: () => {
-				// @ts-expect-error
-				return serverReturn("a{sv}", [
+				return serverReturn<"a{sv}">("a{sv}", [
 					["key1", { signature: "s", value: "value1" }],
 				]);
 			},

@@ -167,7 +167,7 @@ export class dbusInterface {
 		return result;
 	}
 
-	async on<T extends string>(
+	async on<T extends string = "">(
 		signal: string,
 		// @ts-expect-error
 		callback: (...args: DBusTypes<T>) => void,
