@@ -66,6 +66,6 @@ describe("D-Bus Client Integration", () => {
 		const iface = await obj.getInterface("org.freedesktop.DBus");
 
 		const features = (await iface.get<"v">("Features"))[0];
-		expect(Array.isArray(features.value)).toBe(true);
+		expect(Array.isArray(features)).toBe(true);
 	});
 });

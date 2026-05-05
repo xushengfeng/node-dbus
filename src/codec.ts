@@ -1,4 +1,4 @@
-import type { DBusType } from "./dbus_type";
+import type { DBusType, DBusTypes } from "./dbus_type";
 import { align, Endian } from "./types";
 
 const textEncoder = new TextEncoder();
@@ -6,9 +6,10 @@ const textDecoder = new TextDecoder("utf-8");
 
 export function dbusVariant<T extends string>(
 	signature: T,
-	value: DBusType<T>,
-): { signature: T; value: DBusType<T> } {
-	return { signature, value };
+	// @ts-expect-error
+	...values: DBusTypes<T>
+): { signature: T; value: DBusTypes<T> } {
+	return { signature, value: values };
 }
 
 export function splitSignature(sig: string): string[] {
@@ -241,9 +242,12 @@ export class Codec {
 		this.writeString(path);
 	}
 
-	writeVariant(value: unknown, signature: string): void {
+	writeVariant(value: unknown[], signature: string): void {
 		this.writeSignature(signature);
-		this.writeValue(value, signature);
+		const sigParts = splitSignature(signature);
+		for (const [i, sigPart] of sigParts.entries()) {
+			this.writeValue(value[i], sigPart);
+		}
 	}
 
 	writeValue<T extends string>(value: DBusType<T>, signature: T): void {
@@ -286,8 +290,8 @@ export class Codec {
 				break;
 			case "v":
 				this.writeVariant(
-					(value as { value: unknown; signature: string }).value,
-					(value as { value: unknown; signature: string }).signature,
+					(value as { value: unknown[]; signature: string }).value,
+					(value as { value: unknown[]; signature: string }).signature,
 				);
 				break;
 			default:
@@ -475,9 +479,12 @@ export class Decoder {
 		return this.readString();
 	}
 
-	readVariant(): { value: unknown; signature: string } {
+	readVariant(): { value: unknown[]; signature: string } {
 		const signature = this.readSignature();
-		const value = this.readValue(signature);
+		const value = [];
+		for (const sigPart of splitSignature(signature)) {
+			value.push(this.readValue(sigPart));
+		}
 		return { value, signature };
 	}
 

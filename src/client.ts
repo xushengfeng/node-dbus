@@ -141,9 +141,10 @@ export class dbusInterface {
 	}
 
 	async get<T extends string>(property: string): Promise<DBusTypes<T>> {
-		return await this.meta.properties
+		const r = await this.meta.properties
 			.call("Get", "ss", this.op.interface, property)
-			.as<T>();
+			.as<"v">();
+		return r[0].value as DBusTypes<T>;
 	}
 
 	async set<T extends string>(

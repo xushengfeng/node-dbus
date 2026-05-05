@@ -189,7 +189,7 @@ function encodeMessage(message: Message): Uint8Array {
 
 		codec.writeByte(field.code);
 		const sig = getSignatureForField(field.code);
-		codec.writeVariant(field.value, sig);
+		codec.writeVariant([field.value], sig);
 	}
 	const fieldsEnd = codec.length;
 
@@ -240,7 +240,7 @@ function decodeMessage(data: Uint8Array): {
 
 		const code = decoder.readByte() as HeaderFieldCode;
 		const variant = decoder.readVariant();
-		fields.push({ code, value: variant.value });
+		fields.push({ code, value: variant.value[0] });
 	}
 
 	// Ensure we skip exactly fieldsLength bytes even if we misread

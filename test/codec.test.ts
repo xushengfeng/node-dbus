@@ -1,6 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { Codec, Decoder, dbusMessage, Endian, MessageType } from "../src/";
+import {
+	Codec,
+	Decoder,
+	dbusMessage,
+	Endian,
+	MessageType,
+	splitSignature,
+} from "../src/";
 import type { DBusType } from "../src/dbus_type";
+
+describe("splitSignature", () => {
+	it("should split simple signatures", () => {
+		expect(splitSignature("s")).toEqual(["s"]);
+		expect(splitSignature("i")).toEqual(["i"]);
+		expect(splitSignature("b")).toEqual(["b"]);
+	});
+
+	it("should split array signatures", () => {
+		expect(splitSignature("as")).toEqual(["as"]);
+		expect(splitSignature("a{sv}")).toEqual(["a{sv}"]);
+	});
+
+	it("should split struct signatures", () => {
+		expect(splitSignature("(si)")).toEqual(["(si)"]);
+		expect(splitSignature("(i(is))")).toEqual(["(i(is))"]);
+		expect(splitSignature("(i(is)(s))")).toEqual(["(i(is)(s))"]);
+	});
+
+	it("should split multiple signatures", () => {
+		expect(splitSignature("sis")).toEqual(["s", "i", "s"]);
+		expect(splitSignature("a{sv}i")).toEqual(["a{sv}", "i"]);
+		expect(splitSignature("(si)as")).toEqual(["(si)", "as"]);
+	});
+});
 
 describe("Codec", () => {
 	function c<T extends string>(signature: T, value: DBusType<T>) {
@@ -56,10 +88,10 @@ describe("Codec", () => {
 
 	it("should write and read variant", () => {
 		const codec = new Codec();
-		codec.writeVariant("Hello", "s");
+		codec.writeVariant(["Hello"], "s");
 		const decoder = new Decoder(codec.toUint8Array());
 		const result = decoder.readVariant();
-		expect(result.value).toBe("Hello");
+		expect(result.value).toEqual(["Hello"]);
 		expect(result.signature).toBe("s");
 	});
 
@@ -112,7 +144,7 @@ describe("Codec", () => {
 		c("s", "hello");
 		c("i", 42);
 		c("b", true);
-		c("v", { signature: "s", value: "hello" });
+		c("v", { signature: "s", value: ["hello"] });
 		c("(is)", [42, "hello"]);
 		c("(i(is))", [42, [100, "world"]]);
 		c("(i(is)(s))", [42, [100, "world"], ["test"]]);
@@ -127,30 +159,30 @@ describe("Codec", () => {
 			[100, [200, "world"]],
 		]);
 		c("a{sv}", [
-			["name", { signature: "s", value: "test" }],
-			["name2", { signature: "i", value: 42 }],
+			["name", { signature: "s", value: ["test"] }],
+			["name2", { signature: "i", value: [42] }],
 		]);
 		c("a{is}", [
 			[42, "hello"],
 			[100, "world"],
 		]);
 		c("a{xv}", [
-			[42n, { signature: "s", value: "hello" }],
-			[100n, { signature: "i", value: 42 }],
+			[42n, { signature: "s", value: ["hello"] }],
+			[100n, { signature: "i", value: [42] }],
 		]);
 		c("a{sa{sv}}", [
 			[
 				"object1",
 				[
-					["prop1", { signature: "s", value: "val1" }],
-					["prop2", { signature: "i", value: 42 }],
+					["prop1", { signature: "s", value: ["val1"] }],
+					["prop2", { signature: "i", value: [42] }],
 				],
 			],
 			[
 				"object2",
 				[
-					["propA", { signature: "s", value: "valA" }],
-					["propB", { signature: "i", value: 100 }],
+					["propA", { signature: "s", value: ["valA"] }],
+					["propB", { signature: "i", value: [100] }],
 				],
 			],
 		]);
@@ -158,15 +190,15 @@ describe("Codec", () => {
 			[
 				42,
 				[
-					["prop1", { signature: "s", value: "val1" }],
-					["prop2", { signature: "i", value: 42 }],
+					["prop1", { signature: "s", value: ["val1"] }],
+					["prop2", { signature: "i", value: [42] }],
 				],
 			],
 			[
 				100,
 				[
-					["propA", { signature: "s", value: "valA" }],
-					["propB", { signature: "i", value: 100 }],
+					["propA", { signature: "s", value: ["valA"] }],
+					["propB", { signature: "i", value: [100] }],
 				],
 			],
 		]);
@@ -174,21 +206,21 @@ describe("Codec", () => {
 			42,
 			"hello",
 			[
-				["key1", { signature: "s", value: "value1" }],
-				["key2", { signature: "i", value: 100 }],
+				["key1", { signature: "s", value: ["value1"] }],
+				["key2", { signature: "i", value: [100] }],
 			],
 		]);
 		c("a(a{sv})", [
 			[
 				[
-					["key1", { signature: "s", value: "value1" }],
-					["key2", { signature: "i", value: 100 }],
+					["key1", { signature: "s", value: ["value1"] }],
+					["key2", { signature: "i", value: [100] }],
 				],
 			],
 			[
 				[
-					["keyA", { signature: "s", value: "valueA" }],
-					["keyB", { signature: "i", value: 200 }],
+					["keyA", { signature: "s", value: ["valueA"] }],
+					["keyB", { signature: "i", value: [200] }],
 				],
 			],
 		]);

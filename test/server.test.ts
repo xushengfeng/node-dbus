@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dbusClient } from "../src/client";
 import { dbusServer, serverReturn } from "../src/server";
 import { dbusIO } from "../src/dbus";
+import { dbusVariant } from "../src";
 
 const SOCKET_PATH = path.join(__dirname, "test-server-bus.sock");
 
@@ -80,7 +81,7 @@ describe("D-Bus Server and Client Integration", () => {
 			},
 			ReturnDict: () => {
 				return serverReturn<"a{sv}">("a{sv}", [
-					["key1", { signature: "s", value: "value1" }],
+					["key1", dbusVariant<"s">("s", "value1")],
 				]);
 			},
 		});
@@ -97,7 +98,7 @@ describe("D-Bus Server and Client Integration", () => {
 				"key1",
 				{
 					signature: "s",
-					value: "value1",
+					value: ["value1"],
 				},
 			],
 		]);
