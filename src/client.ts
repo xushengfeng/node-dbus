@@ -32,7 +32,7 @@ export class dbusService {
 	constructor(op: typeof dbusService.prototype.op) {
 		this.op = { ...op };
 	}
-	async getObject(path: string) {
+	async getObject(path: `/${string}`) {
 		return new dbusObject({ ...this.op, path });
 	}
 }
