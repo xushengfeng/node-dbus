@@ -10,96 +10,251 @@ const emit = defineEmits<{
   (e: 'message-selected', message: DbusMessage): void
 }>()
 
-const selectedMessageIndex = ref<number | null>(null)
+const selectedIdx = ref<number | null>(null)
+const scrollEl = ref<HTMLElement | null>(null)
+const scrollLeft = ref(0)
 
 const participants = computed(() => {
   const set = new Set<string>()
-  for (const msg of props.messages) {
-    if (msg.sender) set.add(msg.sender)
-    if (msg.destination) set.add(msg.destination)
+  for (const m of props.messages) {
+    if (m.sender) set.add(m.sender)
+    if (m.destination) set.add(m.destination)
   }
   return Array.from(set).sort()
 })
 
+const sp = 200
+const sx = 90
+const rowH = 56
+const headH = 44
+const footH = 32
+
 const posMap = computed(() => {
   const m: Record<string, number> = {}
-  const spacing = 180
-  const startX = 80
-  participants.value.forEach((p, i) => { m[p] = startX + i * spacing })
+  participants.value.forEach((p, i) => { m[p] = sx + i * sp })
   return m
 })
 
-const rowH = 52
-const headH = 60
-const footH = 30
-
-const svgW = computed(() => Math.max(600, participants.value.length * 180 + 160))
+const svgW = computed(() => Math.max(600, participants.value.length * 200 + 180))
 const svgH = computed(() => headH + props.messages.length * rowH + footH)
 
 function click(i: number) {
-  selectedMessageIndex.value = i
+  selectedIdx.value = i
   emit('message-selected', props.messages[i])
 }
 
 function tc(type: string) {
   switch (type) {
-    case 'MethodCall': return '#3498db'
-    case 'MethodReturn': return '#27ae60'
-    case 'Error': return '#e74c3c'
-    case 'Signal': return '#f39c12'
-    default: return '#95a5a6'
+    case 'MethodCall': return '#0969da'
+    case 'MethodReturn': return '#1a7f37'
+    case 'Error': return '#cf222e'
+    case 'Signal': return '#9a6700'
+    default: return '#8b949e'
   }
 }
 
-function short(s: string) { return s.length > 20 ? s.slice(0, 18) + '..' : s }
-function ts(t: number) {
+function short(s: string) { return s.length > 22 ? s.slice(0, 20) + '…' : s }
+
+function fmtTs(t: number) {
   const d = new Date(t * 1000)
   return d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3, '0')
 }
-function lbl(m: DbusMessage) { return m.member || m.errorName || m.interface || m.type }
+
+function lineY(i: number) { return headH + i * rowH + rowH / 2 }
+function arrowX1(msg: DbusMessage) { return posMap.value[msg.sender!] ?? 0 }
+function arrowX2(msg: DbusMessage) { return posMap.value[msg.destination!] ?? 0 }
+function midX(msg: DbusMessage) { return (arrowX1(msg) + arrowX2(msg)) / 2 }
+function arrowDir(msg: DbusMessage) { return arrowX2(msg) >= arrowX1(msg) ? 1 : -1 }
+
+function arrowHead(msg: DbusMessage) {
+  const x = arrowX2(msg)
+  const y = lineY(props.messages.indexOf(msg))
+  const d = arrowDir(msg)
+  const s = 6
+  return `${x},${y} ${x - d * s},${y - s} ${x - d * s},${y + s}`
+}
+
+function onScroll() {
+  if (scrollEl.value) scrollLeft.value = scrollEl.value.scrollLeft
+}
+
+function label1(msg: DbusMessage) {
+  return msg.member || msg.errorName || msg.interface || msg.type
+}
+function label2(msg: DbusMessage) {
+  const parts: string[] = []
+  if (msg.interface) parts.push(msg.interface)
+  if (msg.member) parts.push(msg.member)
+  return parts.join('.')
+}
 </script>
 
 <template>
-  <div class="diagram-wrapper" v-if="messages.length > 0">
-    <svg :width="svgW" :height="svgH" class="seq-svg">
-      <g v-for="p in participants" :key="p">
-        <rect :x="(posMap[p] ?? 0) - 70" y="10" width="140" height="36" rx="6" fill="#2c3e50" />
-        <text :x="posMap[p]" y="33" text-anchor="middle" fill="#ecf0f1" font-size="11" font-family="monospace" font-weight="bold">{{ short(p) }}</text>
-        <line :x1="posMap[p]" y1="46" :x2="posMap[p]" :y2="svgH - footH" stroke="#bdc3c7" stroke-width="1" stroke-dasharray="4,4" />
-      </g>
+  <div class="diagram" v-if="messages.length > 0">
+    <!-- 固定在顶部的参与者名称 -->
+    <div class="sticky-header" :style="{ width: svgW + 'px' }">
+      <div class="header-scroll" :style="{ transform: `translateX(${-scrollLeft}px)` }">
+        <div v-for="p in participants" :key="p" class="participant-box"
+          :style="{ left: (posMap[p] ?? 0) - 80 + 'px' }">
+          <span class="participant-name">{{ short(p) }}</span>
+        </div>
+      </div>
+    </div>
 
-      <g v-for="(msg, i) in messages" :key="i" @click="click(i)" :class="{ sel: selectedMessageIndex === i }" class="mg">
-        <template v-if="msg.sender && msg.destination && posMap[msg.sender] !== undefined && posMap[msg.destination] !== undefined">
-          <text :x="4" :y="headH + i * rowH + 14" font-size="9" fill="#999" font-family="monospace">{{ ts(msg.timestamp) }}</text>
+    <!-- 可滚动的消息体 -->
+    <div class="scroll-body" ref="scrollEl" @scroll="onScroll">
+      <svg :width="svgW" :height="svgH" class="seq-svg">
+        <!-- 网格线 -->
+        <line v-for="p in participants" :key="'g-' + p"
+          :x1="posMap[p]" :y1="0" :x2="posMap[p]" :y2="svgH - footH"
+          stroke="#e8eaed" stroke-width="1" stroke-dasharray="3,3" />
 
-          <line :x1="posMap[msg.sender]" :y1="headH + i * rowH" :x2="posMap[msg.destination]" :y2="headH + i * rowH" :stroke="tc(msg.type)" stroke-width="2" />
+        <!-- 消息行 -->
+        <g v-for="(msg, i) in messages" :key="i"
+          @click="click(i)" class="msg-row" :class="{ sel: selectedIdx === i }">
 
-          <polygon v-if="msg.type === 'Signal'" :points="`${posMap[msg.destination]},${headH + i * rowH} ${(posMap[msg.sender]! > posMap[msg.destination]! ? posMap[msg.sender]! + 7 : posMap[msg.sender]! - 7)},${headH + i * rowH - 4} ${(posMap[msg.sender]! > posMap[msg.destination]! ? posMap[msg.sender]! + 7 : posMap[msg.sender]! - 7)},${headH + i * rowH + 4}`" :fill="tc(msg.type)" />
-          <polygon v-else :points="`${posMap[msg.destination]},${headH + i * rowH} ${posMap[msg.destination]! > posMap[msg.sender]! ? posMap[msg.destination]! - 7 : posMap[msg.destination]! + 7},${headH + i * rowH - 4} ${posMap[msg.destination]! > posMap[msg.sender]! ? posMap[msg.destination]! - 7 : posMap[msg.destination]! + 7},${headH + i * rowH + 4}`" :fill="tc(msg.type)" />
+          <template v-if="msg.sender && msg.destination
+            && posMap[msg.sender] !== undefined && posMap[msg.destination] !== undefined">
 
-          <rect :x="(posMap[msg.sender]! + posMap[msg.destination]!) / 2 - 40" :y="headH + i * rowH - 18" width="80" height="16" rx="3" fill="white" stroke="#ddd" stroke-width="0.5" opacity="0.95" />
-          <text :x="(posMap[msg.sender]! + posMap[msg.destination]!) / 2" :y="headH + i * rowH - 6" font-size="10" fill="#333" font-family="monospace" text-anchor="middle">{{ lbl(msg) }}</text>
-          <text :x="(posMap[msg.sender]! + posMap[msg.destination]!) / 2" :y="headH + i * rowH + 13" font-size="8" :fill="tc(msg.type)" font-family="monospace" text-anchor="middle" font-weight="bold">{{ msg.type }}</text>
-        </template>
-      </g>
+            <!-- 交替背景 -->
+            <rect x="0" :y="headH + i * rowH" :width="svgW" :height="rowH"
+              :fill="i % 2 === 0 ? '#f6f8fa' : 'transparent'" />
 
-      <g :transform="`translate(10, ${svgH - 18})`">
-        <circle cx="8" cy="0" r="4" fill="#3498db" /><text x="16" y="4" font-size="9" fill="#333">MethodCall</text>
-        <circle cx="100" cy="0" r="4" fill="#27ae60" /><text x="108" y="4" font-size="9" fill="#333">MethodReturn</text>
-        <circle cx="210" cy="0" r="4" fill="#e74c3c" /><text x="218" y="4" font-size="9" fill="#333">Error</text>
-        <circle cx="270" cy="0" r="4" fill="#f39c12" /><text x="278" y="4" font-size="9" fill="#333">Signal</text>
-      </g>
-    </svg>
+            <!-- 时间戳 -->
+            <text :x="6" :y="lineY(i) + 4" font-size="9" fill="#8b949e"
+              font-family="monospace">{{ fmtTs(msg.timestamp) }}</text>
+
+            <!-- 连线 -->
+            <line :x1="arrowX1(msg)" :y1="lineY(i)" :x2="arrowX2(msg)" :y2="lineY(i)"
+              :stroke="tc(msg.type)" stroke-width="1.5" />
+
+            <!-- 箭头 -->
+            <polygon :points="arrowHead(msg)" :fill="tc(msg.type)" />
+
+            <!-- 标签背景 -->
+            <rect :x="midX(msg) - 80" :y="lineY(i) - 18" width="160" height="34"
+              rx="5" fill="white"
+              :stroke="selectedIdx === i ? tc(msg.type) : '#d0d7de'"
+              :stroke-width="selectedIdx === i ? 1.5 : 0.5" />
+
+            <!-- 第一行：member name -->
+            <text :x="midX(msg)" :y="lineY(i) - 4" font-size="10.5" fill="#24292e"
+              font-family="monospace" text-anchor="middle" font-weight="600">
+              {{ label1(msg) }}
+            </text>
+
+            <!-- 第二行：interface.member（弱化） -->
+            <text :x="midX(msg)" :y="lineY(i) + 12" font-size="8.5" fill="#8b949e"
+              font-family="monospace" text-anchor="middle">
+              {{ label2(msg) }}
+            </text>
+
+            <!-- 起点圆点 -->
+            <circle :cx="arrowX1(msg)" :cy="lineY(i)" r="3"
+              :fill="tc(msg.type)" opacity="0.5" />
+          </template>
+        </g>
+
+        <!-- 图例 -->
+        <g :transform="`translate(10, ${svgH - 18})`">
+          <g v-for="(item, li) in [
+            { color: '#0969da', label: 'MethodCall' },
+            { color: '#1a7f37', label: 'MethodReturn' },
+            { color: '#cf222e', label: 'Error' },
+            { color: '#9a6700', label: 'Signal' },
+          ]" :key="li" :transform="`translate(${li * 110}, 0)`">
+            <circle cx="5" cy="0" r="3" :fill="item.color" />
+            <text x="13" y="3" font-size="9" fill="#586069" font-family="monospace">{{ item.label }}</text>
+          </g>
+        </g>
+      </svg>
+    </div>
   </div>
-  <div v-else class="empty">No messages to display. Load a pcap file to begin.</div>
+  <div v-else class="empty">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d0d7de" stroke-width="1.5">
+      <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+    </svg>
+    <p>Load a PCAP file to view D-Bus messages</p>
+  </div>
 </template>
 
 <style scoped>
-.diagram-wrapper { overflow: auto; background: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); padding: 12px; }
-.seq-svg { display: block; }
-.mg { cursor: pointer; }
-.mg:hover line, .mg:hover polygon { opacity: 0.7; }
-.mg.sel line { stroke-width: 3; }
-.mg.sel rect { stroke: #333; stroke-width: 1.5; }
-.empty { text-align: center; color: #aaa; padding: 60px 20px; font-size: 14px; }
+.diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 42px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.header-scroll {
+  position: relative;
+  height: 100%;
+  transition: transform 0.05s linear;
+}
+
+.participant-box {
+  position: absolute;
+  top: 4px;
+  width: 160px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #24292e;
+  border-radius: 6px;
+}
+
+.participant-name {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 600;
+  color: #f0f2f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+  max-width: 100%;
+}
+
+.scroll-body {
+  overflow: auto;
+}
+
+.seq-svg {
+  display: block;
+}
+
+.msg-row {
+  cursor: pointer;
+}
+
+.msg-row:hover rect:first-child {
+  fill: #eef1f5 !important;
+}
+
+.msg-row.sel rect:first-child {
+  fill: var(--accent-bg) !important;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 20px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
 </style>

@@ -6,253 +6,161 @@ const props = defineProps<{
   message: DbusMessage
 }>()
 
-const headerFields = computed(() => {
-  const fields = []
-  
-  if (props.message.path) {
-    fields.push({ label: 'Path', value: props.message.path })
+const typeStyle = computed(() => {
+  switch (props.message.type) {
+    case 'MethodCall': return { bg: 'var(--blue-bg)', fg: 'var(--blue)', icon: '→' }
+    case 'MethodReturn': return { bg: 'var(--green-bg)', fg: 'var(--green)', icon: '←' }
+    case 'Error': return { bg: 'var(--red-bg)', fg: 'var(--red)', icon: '✗' }
+    case 'Signal': return { bg: 'var(--orange-bg)', fg: 'var(--orange)', icon: '▶' }
+    default: return { bg: '#f6f8fa', fg: 'var(--text-muted)', icon: '—' }
   }
-  if (props.message.interface) {
-    fields.push({ label: 'Interface', value: props.message.interface })
-  }
-  if (props.message.member) {
-    fields.push({ label: 'Member', value: props.message.member })
-  }
-  if (props.message.destination) {
-    fields.push({ label: 'Destination', value: props.message.destination })
-  }
-  if (props.message.sender) {
-    fields.push({ label: 'Sender', value: props.message.sender })
-  }
-  if (props.message.signature) {
-    fields.push({ label: 'Signature', value: props.message.signature })
-  }
-  if (props.message.errorName) {
-    fields.push({ label: 'Error Name', value: props.message.errorName })
-  }
-  if (props.message.replySerial !== undefined) {
-    fields.push({ label: 'Reply Serial', value: props.message.replySerial.toString() })
-  }
-  
-  return fields
 })
 
-const messageTypeColor = computed(() => {
-  switch (props.message.type) {
-    case 'MethodCall':
-      return '#3498db'
-    case 'MethodReturn':
-      return '#2ecc71'
-    case 'Error':
-      return '#e74c3c'
-    case 'Signal':
-      return '#f39c12'
-    default:
-      return '#95a5a6'
-  }
+const fields = computed(() => {
+  const m = props.message
+  const list: Array<{ label: string; value: string; mono?: boolean }> = []
+  if (m.path) list.push({ label: 'Path', value: m.path, mono: true })
+  if (m.interface) list.push({ label: 'Interface', value: m.interface, mono: true })
+  if (m.member) list.push({ label: 'Member', value: m.member, mono: true })
+  if (m.errorName) list.push({ label: 'Error', value: m.errorName, mono: true })
+  if (m.sender) list.push({ label: 'Sender', value: m.sender, mono: true })
+  if (m.destination) list.push({ label: 'Destination', value: m.destination, mono: true })
+  if (m.signature) list.push({ label: 'Signature', value: m.signature, mono: true })
+  if (m.replySerial !== undefined) list.push({ label: 'Reply Serial', value: String(m.replySerial) })
+  list.push({ label: 'Serial', value: String(m.serial) })
+  return list
 })
 
 const formattedBody = computed(() => {
-  if (!props.message.body || props.message.body.length === 0) {
-    return 'No body'
-  }
-  
-  try {
-    return JSON.stringify(props.message.body, null, 2)
-  } catch {
-    return String(props.message.body)
-  }
+  const b = props.message.body
+  if (!b || b.length === 0) return null
+  try { return JSON.stringify(b, null, 2) }
+  catch { return String(b) }
 })
 
-const formattedRawHeader = computed(() => {
-  try {
-    return JSON.stringify(props.message.raw.header, null, 2)
-  } catch {
-    return 'Unable to display raw header'
-  }
-})
-
-const formattedRawBody = computed(() => {
-  try {
-    return JSON.stringify(props.message.raw.body, null, 2)
-  } catch {
-    return 'Unable to display raw body'
-  }
-})
-
-const formatTimestamp = (timestamp: number) => {
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleString() + '.' + date.getMilliseconds().toString().padStart(3, '0')
+function fmtTs(ts: number) {
+  const d = new Date(ts * 1000)
+  return d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3, '0')
 }
 </script>
 
 <template>
-  <div class="message-detail">
-    <h2 class="detail-title">Message Details</h2>
-    
-    <div class="detail-section">
-      <h3 class="section-title">Basic Information</h3>
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span class="detail-label">Type:</span>
-          <span 
-            class="detail-value type-badge"
-            :style="{ backgroundColor: messageTypeColor }"
-          >
-            {{ message.type }}
-          </span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Serial:</span>
-          <span class="detail-value">{{ message.serial }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Timestamp:</span>
-          <span class="detail-value">{{ formatTimestamp(message.timestamp) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Source:</span>
-          <span class="detail-value">{{ message.source }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Destination:</span>
-          <span class="detail-value">{{ message.destination }}</span>
-        </div>
+  <div class="detail">
+    <div class="type-row">
+      <span class="type-badge" :style="{ background: typeStyle.bg, color: typeStyle.fg }">
+        <span class="type-icon">{{ typeStyle.icon }}</span>
+        {{ message.type }}
+      </span>
+      <span class="timestamp">{{ fmtTs(message.timestamp) }}</span>
+    </div>
+
+    <div class="fields">
+      <div v-for="f in fields" :key="f.label" class="field-row">
+        <span class="field-label">{{ f.label }}</span>
+        <span class="field-value" :class="{ mono: f.mono }">{{ f.value }}</span>
       </div>
     </div>
-    
-    <div class="detail-section" v-if="headerFields.length > 0">
-      <h3 class="section-title">Header Fields</h3>
-      <div class="detail-grid">
-        <div 
-          v-for="field in headerFields" 
-          :key="field.label"
-          class="detail-item"
-        >
-          <span class="detail-label">{{ field.label }}:</span>
-          <span class="detail-value">{{ field.value }}</span>
-        </div>
-      </div>
-    </div>
-    
-    <div class="detail-section">
-      <h3 class="section-title">Body</h3>
-      <pre class="body-content">{{ formattedBody }}</pre>
-    </div>
-    
-    <div class="detail-section">
-      <h3 class="section-title">Raw Data</h3>
-      <div class="raw-data-container">
-        <div class="raw-data-section">
-          <h4>Header</h4>
-          <pre class="raw-content">{{ formattedRawHeader }}</pre>
-        </div>
-        <div class="raw-data-section">
-          <h4>Body</h4>
-          <pre class="raw-content">{{ formattedRawBody }}</pre>
-        </div>
-      </div>
+
+    <div v-if="formattedBody" class="body-section">
+      <div class="section-label">Body</div>
+      <pre class="body-code">{{ formattedBody }}</pre>
     </div>
   </div>
 </template>
 
 <style scoped>
-.message-detail {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-}
-
-.detail-title {
-  margin: 0 0 1.5rem 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #3498db;
-  color: #2c3e50;
-  font-size: 1.5rem;
-}
-
-.detail-section {
-  margin-bottom: 1.5rem;
-}
-
-.section-title {
-  margin: 0 0 0.75rem 0;
-  color: #34495e;
-  font-size: 1.1rem;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 0.5rem;
-}
-
-.detail-grid {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.detail-item {
+.detail {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.detail-label {
-  font-weight: 600;
-  color: #7f8c8d;
-  min-width: 100px;
-  font-size: 0.9rem;
-}
-
-.detail-value {
-  color: #2c3e50;
-  word-break: break-all;
+.type-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .type-badge {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  color: white;
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
-.body-content {
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: 1rem;
-  margin: 0;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  overflow-x: auto;
-  white-space: pre-wrap;
+.type-icon {
+  font-size: 0.65rem;
+}
+
+.timestamp {
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.field-row {
+  display: flex;
+  align-items: baseline;
+  padding: 7px 10px;
+  background: var(--surface);
+  gap: 8px;
+}
+
+.field-label {
+  flex-shrink: 0;
+  width: 90px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.field-value {
+  font-size: 0.8125rem;
+  color: var(--text);
   word-break: break-all;
 }
 
-.raw-data-container {
-  display: grid;
-  gap: 1rem;
+.field-value.mono {
+  font-family: monospace;
+  font-size: 0.75rem;
 }
 
-.raw-data-section {
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: 1rem;
+.body-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.raw-data-section h4 {
-  margin: 0 0 0.5rem 0;
-  color: #34495e;
-  font-size: 0.9rem;
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
-.raw-content {
-  margin: 0;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.8rem;
-  line-height: 1.5;
+.body-code {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: #f6f8fa;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
+  color: var(--text);
 }
 </style>
