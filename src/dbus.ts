@@ -5,8 +5,13 @@ import { MessageType } from "./types";
 
 import { authenticate } from "./auth";
 
+/** 可用于 D-Bus 连接的 socket 类型 */
 export type SocketLike = USocket | NodeSocketAdapter;
 
+/**
+ * D-Bus I/O 管理器，负责消息的发送、接收和路由
+ * 管理与 D-Bus 守护进程的连接，处理请求-响应匹配
+ */
 export class dbusIO {
 	private socket: SocketLike;
 	private serial = 0;
@@ -18,11 +23,19 @@ export class dbusIO {
 	private messageHandlers: Set<(msg: dbusMessage) => void> = new Set();
 	private isConnected = false;
 
+	/**
+	 * 创建 D-Bus I/O 管理器
+	 * @param op - 配置选项，包含 socket 连接
+	 */
 	constructor(op: { socket: SocketLike }) {
 		this.socket = op.socket;
 		// Don't setup read handler until authenticated
 	}
 
+	/**
+	 * 连接到 D-Bus 守护进程
+	 * 进行认证并自动调用 Hello 注册总线名
+	 */
 	async connect(): Promise<void> {
 		if (this.isConnected) return;
 		await authenticate(this.socket);
@@ -38,10 +51,18 @@ export class dbusIO {
 		await this.call(helloMsg);
 	}
 
+	/**
+	 * 添加消息处理器
+	 * @param handler - 消息处理回调函数
+	 */
 	addMessageHandler(handler: (msg: dbusMessage) => void): void {
 		this.messageHandlers.add(handler);
 	}
 
+	/**
+	 * 移除消息处理器
+	 * @param handler - 要移除的处理回调函数
+	 */
 	removeMessageHandler(handler: (msg: dbusMessage) => void): void {
 		this.messageHandlers.delete(handler);
 	}
@@ -98,6 +119,11 @@ export class dbusIO {
 		}
 	}
 
+	/**
+	 * 发送方法调用并等待响应
+	 * @param message - 要发送的 D-Bus 消息
+	 * @returns 响应消息
+	 */
 	async call(message: dbusMessage): Promise<dbusMessage> {
 		if (!this.isConnected) {
 			throw new Error(
@@ -123,6 +149,10 @@ export class dbusIO {
 		});
 	}
 
+	/**
+	 * 发送消息（不等待响应）
+	 * @param message - 要发送的 D-Bus 消息
+	 */
 	async send(message: dbusMessage): Promise<void> {
 		if (!this.isConnected) {
 			throw new Error(
@@ -136,6 +166,10 @@ export class dbusIO {
 		this.socket.write(Buffer.from(data));
 	}
 
+	/**
+	 * 发送信号消息
+	 * @param message - 要发送的 D-Bus 消息（自动设置为 Signal 类型）
+	 */
 	async emit(message: dbusMessage): Promise<void> {
 		message.setType(MessageType.Signal);
 		return this.send(message);

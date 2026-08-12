@@ -8,9 +8,14 @@ import {
 	MessageType,
 } from "./types";
 
+/** D-Bus 消息，封装消息头和消息体的编码/解码操作 */
 export class dbusMessage {
 	private message: Message;
 
+	/**
+	 * 创建 D-Bus 消息
+	 * @param message - 可选的部分消息结构，未提供字段使用默认值
+	 */
 	constructor(message?: Partial<Message>) {
 		this.message = {
 			header: {
@@ -26,75 +31,99 @@ export class dbusMessage {
 		};
 	}
 
+	/** 获取消息类型 */
 	getType(): MessageType {
 		return this.message.header.type;
 	}
+	/** 设置消息类型 */
 	setType(type: MessageType): void {
 		this.message.header.type = type;
 	}
+	/** 获取消息序列号 */
 	getSerial(): number {
 		return this.message.header.serial;
 	}
+	/** 设置消息序列号 */
 	setSerial(serial: number): void {
 		this.message.header.serial = serial;
 	}
+	/** 获取对象路径 */
 	getPath(): string | undefined {
 		return this.getField(HeaderFieldCode.Path) as string | undefined;
 	}
+	/** 设置对象路径 */
 	setPath(path: string): void {
 		this.setField(HeaderFieldCode.Path, path);
 	}
+	/** 获取接口名 */
 	getInterface(): string | undefined {
 		return this.getField(HeaderFieldCode.Interface) as string | undefined;
 	}
+	/** 设置接口名 */
 	setInterface(iface: string): void {
 		this.setField(HeaderFieldCode.Interface, iface);
 	}
+	/** 获取成员名（方法或信号名） */
 	getMember(): string | undefined {
 		return this.getField(HeaderFieldCode.Member) as string | undefined;
 	}
+	/** 设置成员名（方法或信号名） */
 	setMember(member: string): void {
 		this.setField(HeaderFieldCode.Member, member);
 	}
+	/** 获取目标总线名 */
 	getDestination(): string | undefined {
 		return this.getField(HeaderFieldCode.Destination) as string | undefined;
 	}
+	/** 设置目标总线名 */
 	setDestination(destination: string): void {
 		this.setField(HeaderFieldCode.Destination, destination);
 	}
+	/** 获取发送者总线名 */
 	getSender(): string | undefined {
 		return this.getField(HeaderFieldCode.Sender) as string | undefined;
 	}
+	/** 设置发送者总线名 */
 	setSender(sender: string): void {
 		this.setField(HeaderFieldCode.Sender, sender);
 	}
+	/** 获取类型签名 */
 	getSignature(): string {
 		return (this.getField(HeaderFieldCode.Signature) as string) ?? "";
 	}
+	/** 设置类型签名 */
 	setSignature(signature: string): void {
 		this.setField(HeaderFieldCode.Signature, signature);
 	}
+	/** 获取回复序列号 */
 	getReplySerial(): number | undefined {
 		return this.getField(HeaderFieldCode.ReplySerial) as number | undefined;
 	}
+	/** 设置回复序列号 */
 	setReplySerial(serial: number): void {
 		this.setField(HeaderFieldCode.ReplySerial, serial);
 	}
+	/** 获取错误名 */
 	getErrorName(): string | undefined {
 		return this.getField(HeaderFieldCode.ErrorName) as string | undefined;
 	}
+	/** 设置错误名 */
 	setErrorName(errorName: string): void {
 		this.setField(HeaderFieldCode.ErrorName, errorName);
 	}
+	/** 获取 Unix 文件描述符数量 */
 	getUnixFds(): number | undefined {
 		return this.getField(HeaderFieldCode.UnixFds) as number | undefined;
 	}
+	/** 设置 Unix 文件描述符数量 */
 	setUnixFds(count: number): void {
 		this.setField(HeaderFieldCode.UnixFds, count);
 	}
+	/** 获取消息体 */
 	getBody(): unknown[] {
 		return this.message.body;
 	}
+	/** 设置消息体 */
 	setBody(body: unknown[]): void {
 		this.message.body = body;
 	}
@@ -113,10 +142,16 @@ export class dbusMessage {
 		}
 	}
 
+	/** 将消息编码为字节数组 */
 	encode(): Uint8Array {
 		return encodeMessage(this.message);
 	}
 
+	/**
+	 * 从字节数组解码消息
+	 * @param data - 要解码的字节数据
+	 * @returns 解码后的消息和消耗的字节数
+	 */
 	static decode(data: Uint8Array): { message: dbusMessage; consumed: number } {
 		const decoded = decodeMessage(data);
 		return {
@@ -125,6 +160,7 @@ export class dbusMessage {
 		};
 	}
 
+	/** 将消息转换为 JSON 对象 */
 	toJSON(): Message {
 		return JSON.parse(JSON.stringify(this.message));
 	}

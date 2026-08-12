@@ -1,18 +1,25 @@
 import type { USocket } from "myde-unix-socket";
 import type { NodeSocketAdapter } from "./node-socket-adapter";
 
+/** 可用于 D-Bus 连接的 socket 类型 */
 export type SocketLike = USocket | NodeSocketAdapter;
 
+/** 获取当前进程的 UID */
 function getUid(): string {
 	return process.getuid?.()?.toString() ?? "1000";
 }
 
+/** 将 UID 字符串编码为十六进制 */
 function encodeUid(uid: string): string {
 	return Array.from(uid)
 		.map((c) => c.charCodeAt(0).toString(16).padStart(2, "0"))
 		.join("");
 }
 
+/**
+ * 使用 EXTERNAL 机制对 D-Bus socket 进行认证
+ * @param socket - 要认证的 socket 连接
+ */
 export async function authenticate(socket: SocketLike): Promise<void> {
 	const uid = getUid();
 	const encodedUid = encodeUid(uid);

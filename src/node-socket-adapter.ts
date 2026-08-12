@@ -1,21 +1,38 @@
 import { Duplex } from "stream";
 import type net from "net";
 
+/** NodeSocketAdapter 事件类型映射 */
 export interface NodeSocketAdapterEvents {
+	/** 收到数据 */
 	data: (data: Buffer, fds: number[]) => void;
+	/** 连接建立 */
 	connect: () => void;
+	/** 连接结束 */
 	end: () => void;
+	/** 连接关闭 */
 	close: () => void;
+	/** 发生错误 */
 	error: (err: Error) => void;
+	/** 缓冲区可写 */
 	drain: () => void;
+	/** 写入完成 */
 	finish: () => void;
 }
 
+/**
+ * 将 Node.js net.Socket 适配为 USocket 兼容的 Duplex 流
+ * 用于 D-Bus 连接的 socket 适配
+ */
 export class NodeSocketAdapter extends Duplex {
+	/** 文件描述符 */
 	fd?: number;
 	private _socket: net.Socket;
 	private _destroyed: boolean = false;
 
+	/**
+	 * 创建 socket 适配器
+	 * @param socket - 要适配的 Node.js net.Socket
+	 */
 	constructor(socket: net.Socket) {
 		super();
 		this._socket = socket;
@@ -74,6 +91,11 @@ export class NodeSocketAdapter extends Duplex {
 		return super.emit(event, ...args);
 	}
 
+	/**
+	 * 连接到指定路径的 Unix socket
+	 * @param path - socket 文件路径
+	 * @param cb - 连接成功回调
+	 */
 	connect(path: string, cb?: () => void): void {
 		this._socket.connect(path, cb);
 	}
@@ -99,6 +121,10 @@ export class NodeSocketAdapter extends Duplex {
 		return super.end(...args);
 	}
 
+	/**
+	 * 销毁连接
+	 * @param error - 可选的错误对象
+	 */
 	destroy(error?: Error): this {
 		if (this._destroyed) {
 			return this;
@@ -109,6 +135,11 @@ export class NodeSocketAdapter extends Duplex {
 	}
 }
 
+/**
+ * 创建 NodeSocketAdapter 实例
+ * @param socket - Node.js net.Socket
+ * @returns NodeSocketAdapter 实例
+ */
 export function createNodeSocketAdapter(socket: net.Socket): NodeSocketAdapter {
 	return new NodeSocketAdapter(socket);
 }

@@ -4,7 +4,9 @@ import type { DBusTypes } from "./dbus_type";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
+/** 方法处理器可能返回的类型 */
 type MayPromise<T> = Promise<T> | T;
+/** D-Bus 服务方法处理器类型 */
 export type ServerMethodHandler = (...args: any[]) => MayPromise<
 	| {
 			signature: string;
@@ -13,6 +15,12 @@ export type ServerMethodHandler = (...args: any[]) => MayPromise<
 	| undefined
 >;
 
+/**
+ * 创建服务方法返回值
+ * @param signature - 返回值的 D-Bus 类型签名
+ * @param args - 返回值
+ * @returns 包含签名和值的返回对象
+ */
 export function serverReturn<T extends string>(
 	signature: T,
 	// @ts-expect-error
@@ -21,6 +29,7 @@ export function serverReturn<T extends string>(
 	return { signature, value: args };
 }
 
+/** D-Bus 服务端，用于注册和处理 D-Bus 方法调用 */
 export class dbusServer {
 	private io: dbusIO;
 	private name: string;
@@ -28,11 +37,20 @@ export class dbusServer {
 	private handlers: Map<string, Map<string, Map<string, ServerMethodHandler>>> =
 		new Map();
 
+	/**
+	 * 创建 D-Bus 服务端
+	 * @param io - D-Bus I/O 管理器
+	 * @param name - 服务总线名
+	 */
 	constructor(io: dbusIO, name: string) {
 		this.io = io;
 		this.name = name;
 	}
 
+	/**
+	 * 初始化服务端
+	 * 注册总线名并开始监听方法调用
+	 */
 	async init(): Promise<void> {
 		const client = new dbusClient({ io: this.io });
 		const service = await client.getService("org.freedesktop.DBus");
@@ -43,6 +61,12 @@ export class dbusServer {
 		this.io.addMessageHandler(this.handleMessage.bind(this));
 	}
 
+	/**
+	 * 注册对象及其方法处理器
+	 * @param path - 对象路径
+	 * @param iface - 接口名
+	 * @param methods - 方法处理器映射
+	 */
 	addObject(
 		path: string,
 		iface: string,
@@ -55,6 +79,13 @@ export class dbusServer {
 		pathHandlers.set(iface, new Map(Object.entries(methods)));
 	}
 
+	/**
+	 * 获取指定方法的处理器
+	 * @param path - 对象路径
+	 * @param iface - 接口名
+	 * @param method - 方法名
+	 * @returns 方法处理器，不存在则返回 undefined
+	 */
 	getHandler(
 		path: string,
 		iface: string,
@@ -63,6 +94,11 @@ export class dbusServer {
 		return this.handlers.get(path)?.get(iface)?.get(method);
 	}
 
+	/**
+	 * 移除注册的对象
+	 * @param path - 对象路径
+	 * @param iface - 可选接口名，不指定则移除该路径下所有接口
+	 */
 	removeObject(path: string, iface?: string): void {
 		if (!iface) {
 			this.handlers.delete(path);
@@ -71,6 +107,14 @@ export class dbusServer {
 		}
 	}
 
+	/**
+	 * 发送 D-Bus 信号
+	 * @param path - 对象路径
+	 * @param iface - 接口名
+	 * @param name - 信号名
+	 * @param signature - 参数类型签名
+	 * @param args - 信号参数
+	 */
 	async emitSignal(
 		path: string,
 		iface: string,
@@ -90,6 +134,7 @@ export class dbusServer {
 		await this.io.send(msg);
 	}
 
+	/** 处理收到的 D-Bus 消息 */
 	private async handleMessage(msg: dbusMessage): Promise<void> {
 		if (msg.getType() !== MessageType.MethodCall) return;
 

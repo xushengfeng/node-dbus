@@ -4,6 +4,12 @@ import { align, Endian } from "./types";
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8");
 
+/**
+ * 创建 D-Bus variant 值
+ * @param signature - variant 的类型签名
+ * @param values - 签名对应的值
+ * @returns 包含签名和值的 variant 对象
+ */
 export function dbusVariant<T extends string>(
 	signature: T,
 	// @ts-expect-error
@@ -12,6 +18,11 @@ export function dbusVariant<T extends string>(
 	return { signature, value: values };
 }
 
+/**
+ * 将 D-Bus 类型签名字符串拆分为独立的类型签名数组
+ * @param sig - D-Bus 类型签名字符串，如 "a{sv}" 或 "is"
+ * @returns 拆分后的类型签名数组
+ */
 export function splitSignature(sig: string): string[] {
 	const result: string[] = [];
 	let i = 0;
@@ -59,6 +70,11 @@ export function splitSignature(sig: string): string[] {
 	return result;
 }
 
+/**
+ * 获取 D-Bus 类型签名的对齐要求（字节数）
+ * @param sig - D-Bus 类型签名
+ * @returns 对齐字节数
+ */
 export function getAlignment(sig: string): number {
 	if (sig.startsWith("a")) return 4;
 	switch (sig[0]) {
@@ -87,12 +103,18 @@ export function getAlignment(sig: string): number {
 	}
 }
 
+/** D-Bus 编码器，用于将值序列化为 D-Bus wire format */
 export class Codec {
 	private buffer: ArrayBuffer;
 	private view: DataView;
 	private offset: number;
 	private endian: Endian;
 
+	/**
+	 * 创建编码器
+	 * @param endian - 字节序，默认小端
+	 * @param size - 初始缓冲区大小
+	 */
 	constructor(endian: Endian = Endian.Little, size = 256) {
 		this.buffer = new ArrayBuffer(size);
 		this.view = new DataView(this.buffer);
@@ -100,10 +122,12 @@ export class Codec {
 		this.endian = endian;
 	}
 
+	/** 获取已编码的数据 */
 	get data(): Uint8Array {
 		return new Uint8Array(this.buffer, 0, this.offset);
 	}
 
+	/** 获取已写入的字节长度 */
 	get length(): number {
 		return this.offset;
 	}
@@ -123,12 +147,14 @@ export class Codec {
 		}
 	}
 
+	/** 写入一个字节 */
 	writeByte(value: number): void {
 		this.ensureCapacity(1);
 		this.view.setUint8(this.offset, value);
 		this.offset += 1;
 	}
 
+	/** 写入有符号16位整数 */
 	writeInt16(value: number): void {
 		this.ensureCapacity(2);
 		const pad = align(this.offset, 2);
@@ -141,6 +167,7 @@ export class Codec {
 		this.offset += 2;
 	}
 
+	/** 写入无符号16位整数 */
 	writeUint16(value: number): void {
 		this.ensureCapacity(2);
 		const pad = align(this.offset, 2);
@@ -153,6 +180,7 @@ export class Codec {
 		this.offset += 2;
 	}
 
+	/** 写入有符号32位整数 */
 	writeInt32(value: number): void {
 		this.ensureCapacity(4);
 		const pad = align(this.offset, 4);
@@ -165,6 +193,7 @@ export class Codec {
 		this.offset += 4;
 	}
 
+	/** 写入无符号32位整数 */
 	writeUint32(value: number): void {
 		this.ensureCapacity(4);
 		const pad = align(this.offset, 4);
@@ -177,6 +206,7 @@ export class Codec {
 		this.offset += 4;
 	}
 
+	/** 写入有符号64位整数 */
 	writeInt64(value: bigint): void {
 		this.ensureCapacity(8);
 		const pad = align(this.offset, 8);
@@ -189,6 +219,7 @@ export class Codec {
 		this.offset += 8;
 	}
 
+	/** 写入无符号64位整数 */
 	writeUint64(value: bigint): void {
 		this.ensureCapacity(8);
 		const pad = align(this.offset, 8);
@@ -201,6 +232,7 @@ export class Codec {
 		this.offset += 8;
 	}
 
+	/** 写入双精度浮点数 */
 	writeDouble(value: number): void {
 		this.ensureCapacity(8);
 		const pad = align(this.offset, 8);
@@ -213,10 +245,12 @@ export class Codec {
 		this.offset += 8;
 	}
 
+	/** 写入布尔值（编码为 UINT32） */
 	writeBoolean(value: boolean): void {
 		this.writeUint32(value ? 1 : 0);
 	}
 
+	/** 写入 D-Bus 类型签名 */
 	writeSignature(sig: string): void {
 		this.ensureCapacity(1 + sig.length + 1);
 		this.view.setUint8(this.offset, sig.length);
@@ -228,6 +262,7 @@ export class Codec {
 		this.offset += 1;
 	}
 
+	/** 写入 UTF-8 字符串（UINT32 长度前缀 + 内容 + null 终止符） */
 	writeString(value: string): void {
 		const encoded = textEncoder.encode(value);
 		this.writeUint32(encoded.length);
@@ -238,10 +273,12 @@ export class Codec {
 		this.offset += 1;
 	}
 
+	/** 写入 D-Bus 对象路径（与字符串编码相同） */
 	writeObjectPath(path: string): void {
 		this.writeString(path);
 	}
 
+	/** 写入 D-Bus variant 值（签名 + 值） */
 	writeVariant(value: unknown[], signature: string): void {
 		this.writeSignature(signature);
 		const sigParts = splitSignature(signature);
@@ -250,6 +287,11 @@ export class Codec {
 		}
 	}
 
+	/**
+	 * 根据签名写入 D-Bus 值
+	 * @param value - 要写入的值
+	 * @param signature - D-Bus 类型签名
+	 */
 	writeValue<T extends string>(value: DBusType<T>, signature: T): void {
 		switch (signature) {
 			case "y":
@@ -344,36 +386,47 @@ export class Codec {
 		}
 	}
 
+	/** 将编码器内容导出为 Uint8Array */
 	toUint8Array(): Uint8Array {
 		return new Uint8Array(this.buffer, 0, this.offset);
 	}
 }
 
+/** D-Bus 解码器，用于从 wire format 反序列化值 */
 export class Decoder {
 	view: DataView;
 	offset: number;
 	private endian: Endian;
 
+	/**
+	 * 创建解码器
+	 * @param data - 要解码的字节数据
+	 * @param endian - 字节序，默认小端
+	 */
 	constructor(data: Uint8Array, endian: Endian = Endian.Little) {
 		this.view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 		this.offset = 0;
 		this.endian = endian;
 	}
 
+	/** 当前读取位置 */
 	get position(): number {
 		return this.offset;
 	}
 
+	/** 设置当前读取位置 */
 	set position(value: number) {
 		this.offset = value;
 	}
 
+	/** 读取一个字节 */
 	readByte(): number {
 		const value = this.view.getUint8(this.offset);
 		this.offset += 1;
 		return value;
 	}
 
+	/** 读取有符号16位整数 */
 	readInt16(): number {
 		this.offset += align(this.offset, 2);
 		const value =
@@ -384,6 +437,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取无符号16位整数 */
 	readUint16(): number {
 		this.offset += align(this.offset, 2);
 		const value =
@@ -394,6 +448,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取有符号32位整数 */
 	readInt32(): number {
 		this.offset += align(this.offset, 4);
 		const value =
@@ -404,6 +459,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取无符号32位整数 */
 	readUint32(): number {
 		this.offset += align(this.offset, 4);
 		const value =
@@ -414,6 +470,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取有符号64位整数 */
 	readInt64(): bigint {
 		this.offset += align(this.offset, 8);
 		const value =
@@ -424,6 +481,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取无符号64位整数 */
 	readUint64(): bigint {
 		this.offset += align(this.offset, 8);
 		const value =
@@ -434,6 +492,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取双精度浮点数 */
 	readDouble(): number {
 		this.offset += align(this.offset, 8);
 		const value =
@@ -444,10 +503,12 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取布尔值 */
 	readBoolean(): boolean {
 		return this.readUint32() !== 0;
 	}
 
+	/** 读取 D-Bus 类型签名 */
 	readSignature(): string {
 		const length = this.view.getUint8(this.offset);
 		this.offset += 1;
@@ -462,6 +523,7 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取 UTF-8 字符串 */
 	readString(): string {
 		const length = this.readUint32();
 		const value = textDecoder.decode(
@@ -475,10 +537,12 @@ export class Decoder {
 		return value;
 	}
 
+	/** 读取 D-Bus 对象路径 */
 	readObjectPath(): string {
 		return this.readString();
 	}
 
+	/** 读取 D-Bus variant 值 */
 	readVariant(): { value: unknown[]; signature: string } {
 		const signature = this.readSignature();
 		const value = [];
@@ -488,6 +552,11 @@ export class Decoder {
 		return { value, signature };
 	}
 
+	/**
+	 * 根据签名读取 D-Bus 值
+	 * @param signature - D-Bus 类型签名
+	 * @returns 解码后的值
+	 */
 	readValue<T extends string>(signature: T): DBusType<T> {
 		switch (signature) {
 			case "y":
