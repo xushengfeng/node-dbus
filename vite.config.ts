@@ -14,7 +14,7 @@ export default defineConfig({
 		rollupOptions: {
 			// make sure to externalize deps that shouldn't be bundled
 			// into your library
-			external: ["myde-unix-socket", "child_process", "fs", "path", "events"],
+			external: ["myde-unix-socket", "child_process", "fs", "path", "events", "stream", "net"],
 			output: {
 				// Provide global variables to use in the UMD build
 				// for externalized deps
