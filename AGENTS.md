@@ -279,6 +279,81 @@ const [names] = await meta.ListNames();
 const off = await meta.onNameOwnerChanged((name, old, new_) => { ... });
 ```
 
+## 服务端
+
+`dbusServer` 提供简单的 D-Bus 服务注册和方法处理功能。
+
+### 基本用法
+
+```ts
+import { dbusServer, dbusIO, serverReturn } from "myde-dbus";
+
+const io = new dbusIO({ socket });
+await io.connect();
+
+// 创建服务端并注册总线名
+const server = new dbusServer(io, "com.example.MyService");
+await server.init();
+```
+
+### addObject() - 注册方法处理器
+
+通过 `addObject` 注册对象路径、接口和方法处理器。处理器接收解码后的参数，需返回 `serverReturn()` 或 `undefined`。
+
+```ts
+server.addObject("/com/example/Object", "com.example.Interface", {
+  // 无参方法
+  Hello: () => {
+    return serverReturn("s", "world");
+  },
+
+  // 有参方法，参数按签名顺序展开
+  Add: (a: number, b: number) => {
+    return serverReturn("i", a + b);
+  },
+
+  // 无返回值的方法
+  Notify: (msg: string) => {
+    console.log(msg);
+    return undefined;
+  },
+});
+```
+
+**`serverReturn` 参数与 `call` 一致**，签名后参数展开：
+
+```ts
+// serverReturn(签名, ...参数)
+serverReturn("s", "hello")        // 返回 string
+serverReturn("i", 42)             // 返回 int32
+serverReturn("as", ["a", "b"])    // 返回 string[]
+serverReturn("a{sv}", [           // 返回 dict
+  ["key", dbusVariant<"s">("s", "value")],
+]);
+```
+
+### emitSignal() - 发送信号
+
+```ts
+await server.emitSignal(
+  "/com/example/Object",
+  "com.example.Interface",
+  "NameChanged",
+  "s",              // 签名
+  ["new-name"],     // 参数
+);
+```
+
+### removeObject() - 移除对象
+
+```ts
+// 移除指定接口
+server.removeObject("/com/example/Object", "com.example.Interface");
+
+// 移除路径下所有接口
+server.removeObject("/com/example/Object");
+```
+
 ## 测试
 
 测试文件位于 `test/` 目录，使用 Vitest 运行。测试覆盖：

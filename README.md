@@ -52,9 +52,9 @@ async function main() {
     const obj = await service.getObject("/org/freedesktop/DBus");
     const iface = await obj.getInterface("org.freedesktop.DBus");
 
-    // 调用无参方法
-    const response = await iface.call("ListNames");
-    console.log("总线上的所有服务名称:", response.getBody()[0]);
+    // 调用无参方法，返回元组需解构
+    const [names] = await iface.call("ListNames").as<"as">();
+    console.log("总线上的所有服务名称:", names);
 }
 
 main().catch(console.error);
@@ -90,12 +90,12 @@ async function main() {
     const obj = await service.getObject("/org/freedesktop/DBus");
     const iface = await obj.getInterface("org.freedesktop.DBus");
 
-    // 调用无参方法
-    const response = await iface.call("ListNames");
-    console.log("总线上的所有服务名称:", response.getBody()[0]);
+    // 调用无参方法，返回元组需解构
+    const [names] = await iface.call("ListNames").as<"as">();
+    console.log("总线上的所有服务名称:", names);
 
-    // 监听信号 (支持返回异步取消订阅函数)
-    const unsubscribe = await iface.on("NameOwnerChanged", (name, oldOwner, newOwner) => {
+    // 监听信号（回调参数是展开的，不是元组）
+    const unsubscribe = await iface.on<"sss">("NameOwnerChanged", (name, oldOwner, newOwner) => {
         console.log(`NameOwnerChanged 事件: ${name} | ${oldOwner} -> ${newOwner}`);
     });
 }
@@ -108,7 +108,7 @@ main().catch(console.error);
 
 ```typescript
 import net from "net";
-import { dbusServer, dbusIO, createNodeSocketAdapter } from "myde-dbus";
+import { dbusServer, dbusIO, createNodeSocketAdapter, serverReturn } from "myde-dbus";
 
 async function main() {
     // 使用 Node.js 原生 net.Socket
@@ -128,15 +128,13 @@ async function main() {
     const server = new dbusServer(io, "com.my.CustomService");
     await server.init();
 
-    // 对外暴露方法
+    // 对外暴露方法，返回 serverReturn(签名, ...参数)
     server.addObject("/com/my/CustomObject", "com.my.CustomInterface", {
         Echo: (text: string) => {
-            // 返回输入值
-            return text;
+            return serverReturn("s", text);
         },
         Add: (a: number, b: number) => {
-            // 返回两数之和
-            return a + b;
+            return serverReturn("i", a + b);
         },
     });
 
@@ -158,36 +156,4 @@ main().catch(console.error);
 
 ## API 参考文档
 
-### `NodeSocketAdapter`
-
-将 Node.js 原生 `net.Socket` 包装为兼容 `USocket` 接口的适配器。
-
-- `new NodeSocketAdapter(socket: net.Socket)`: 创建适配器实例
-- `createNodeSocketAdapter(socket: net.Socket)`: 工厂函数，创建适配器实例
-- `connect(path: string, cb?: () => void)`: 连接到指定的 Unix Socket 路径
-- `destroy(error?: Error)`: 销毁 socket 连接
-
-### `dbusClient`
-
-客户端连接的顶级入口。
-
-- `getService(name: string)`: 查找并获取一个总线服务。
-
-### `dbusInterface`
-
-代表一个远程对象上的指定接口，用于发号施令和接收信号。
-
-- `call(method: string, signature?: string, ...args: unknown[])`: 向指定接口发起一个 D-Bus 方法调用。
-- `get(property: string)`: 读取某项 D-Bus 属性。
-- `set(property: string, value: unknown, signature: string)`: 设置某项 D-Bus 属性。
-- `getAll()`: 批量获取对象上的所有属性字典。
-- `on(signal: string, callback: Function)`: 订阅 D-Bus 信号监听。返回一个包含取消订阅逻辑的 `Promise`。
-
-### `dbusServer`
-
-服务端控制层，用于注册和暴露本地的方法。
-
-- `init()`: 向守护进程申请并绑定总线服务名称，且注册全局消息路由监听机制。
-- `addObject(path: string, interface: string, methods: Record<string, Function>)`: 在指定路径和接口上挂载本地方法供外部调用。
-- `removeObject(path: string, interface?: string)`: 卸载指定的对象或接口。
-- `emitSignal(path: string, interface: string, name: string, signature?: string, args?: unknown[])`: 从当前服务端向外广播一条 D-Bus 信号。
+详见[AGENTS.md](./AGENTS.md)

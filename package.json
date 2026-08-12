@@ -21,6 +21,7 @@
     "files": [
         "dist",
         "README.md",
+        "AGENTS.md",
         "LICENSE"
     ],
     "scripts": {
