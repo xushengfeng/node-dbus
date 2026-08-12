@@ -1,8 +1,8 @@
 import type { USocket } from "myde-unix-socket";
-import type { NodeSocketAdapter } from "./node-socket-adapter";
+import type net from "net";
 
 /** 可用于 D-Bus 连接的 socket 类型 */
-export type SocketLike = USocket | NodeSocketAdapter;
+export type SocketLike = USocket | net.Socket;
 
 /** 获取当前进程的 UID */
 function getUid(): string {

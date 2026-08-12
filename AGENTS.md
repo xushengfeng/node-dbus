@@ -24,7 +24,6 @@ src/
 ├── dbus_type.ts         # D-Bus 类型系统（类型签名解析）
 ├── index.ts             # 模块入口
 ├── message.ts           # D-Bus 消息结构（dbusMessage）
-├── node-socket-adapter.ts # Node.js socket 适配器
 ├── server.ts            # D-Bus 服务端（dbusServer）
 └── types.ts             # 基础类型定义（Endian, MessageType, HeaderFieldCode 等）
 ```
@@ -361,4 +360,4 @@ server.removeObject("/com/example/Object");
 - 客户端（client.test.ts）
 - 服务端（server.test.ts）
 - 消息类型（dbus_type.test-d.ts）
-- Socket 适配器（node-socket-adapter.test.ts）
+- net.Socket 兼容性（net-socket.test.ts）

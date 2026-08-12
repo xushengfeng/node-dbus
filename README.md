@@ -28,21 +28,20 @@ _注意：本库支持两种 Unix Socket 实现方式：Node.js 原生 `net.Sock
 
 ```typescript
 import net from "net";
-import { dbusClient, dbusIO, createNodeSocketAdapter } from "myde-dbus";
+import { dbusClient, dbusIO } from "myde-dbus";
 
 async function main() {
     // 使用 Node.js 原生 net.Socket
-    const nodeSocket = new net.Socket();
-    const adapter = createNodeSocketAdapter(nodeSocket);
+    const socket = new net.Socket();
 
     // 连接到系统总线或用户会话总线
-    nodeSocket.connect("/run/user/1000/bus");
+    socket.connect("/run/user/1000/bus");
 
     // 等待连接完成
-    await new Promise((resolve) => nodeSocket.on("connect", resolve));
+    await new Promise((resolve) => socket.on("connect", resolve));
 
     // 初始化 IO 并自动进行身份验证连接
-    const io = new dbusIO({ socket: adapter });
+    const io = new dbusIO({ socket });
     await io.connect();
 
     const client = new dbusClient({ io });
@@ -108,20 +107,19 @@ main().catch(console.error);
 
 ```typescript
 import net from "net";
-import { dbusServer, dbusIO, createNodeSocketAdapter, serverReturn } from "myde-dbus";
+import { dbusServer, dbusIO, serverReturn } from "myde-dbus";
 
 async function main() {
     // 使用 Node.js 原生 net.Socket
-    const nodeSocket = new net.Socket();
-    const adapter = createNodeSocketAdapter(nodeSocket);
+    const socket = new net.Socket();
 
     // 连接到系统总线或用户会话总线
-    nodeSocket.connect("/run/user/1000/bus");
+    socket.connect("/run/user/1000/bus");
 
     // 等待连接完成
-    await new Promise((resolve) => nodeSocket.on("connect", resolve));
+    await new Promise((resolve) => socket.on("connect", resolve));
 
-    const io = new dbusIO({ socket: adapter });
+    const io = new dbusIO({ socket });
     await io.connect();
 
     // 初始化 Server 并申请注册总线名称

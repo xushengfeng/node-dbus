@@ -1,12 +1,12 @@
 import type { USocket } from "myde-unix-socket";
-import type { NodeSocketAdapter } from "./node-socket-adapter";
+import type net from "net";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
 import { authenticate } from "./auth";
 
 /** 可用于 D-Bus 连接的 socket 类型 */
-export type SocketLike = USocket | NodeSocketAdapter;
+export type SocketLike = USocket | net.Socket;
 
 /**
  * D-Bus I/O 管理器，负责消息的发送、接收和路由
