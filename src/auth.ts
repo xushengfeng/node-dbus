@@ -1,4 +1,7 @@
 import type { USocket } from "myde-unix-socket";
+import type { NodeSocketAdapter } from "./node-socket-adapter";
+
+export type SocketLike = USocket | NodeSocketAdapter;
 
 function getUid(): string {
 	return process.getuid?.()?.toString() ?? "1000";
@@ -10,7 +13,7 @@ function encodeUid(uid: string): string {
 		.join("");
 }
 
-export async function authenticate(socket: USocket): Promise<void> {
+export async function authenticate(socket: SocketLike): Promise<void> {
 	const uid = getUid();
 	const encodedUid = encodeUid(uid);
 

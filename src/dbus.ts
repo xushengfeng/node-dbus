@@ -1,11 +1,14 @@
 import type { USocket } from "myde-unix-socket";
+import type { NodeSocketAdapter } from "./node-socket-adapter";
 import { dbusMessage } from "./message";
 import { MessageType } from "./types";
 
 import { authenticate } from "./auth";
 
+export type SocketLike = USocket | NodeSocketAdapter;
+
 export class dbusIO {
-	private socket: USocket;
+	private socket: SocketLike;
 	private serial = 0;
 	private pendingCalls: Map<
 		number,
@@ -15,7 +18,7 @@ export class dbusIO {
 	private messageHandlers: Set<(msg: dbusMessage) => void> = new Set();
 	private isConnected = false;
 
-	constructor(op: { socket: USocket }) {
+	constructor(op: { socket: SocketLike }) {
 		this.socket = op.socket;
 		// Don't setup read handler until authenticated
 	}

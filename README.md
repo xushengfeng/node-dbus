@@ -2,7 +2,7 @@
 
 一个使用 TypeScript 编写的、基于 Node.js 原生 Unix Socket 的 D-Bus 客户端和服务端通信库。
 
-本库直接在 Unix Socket 上通过协议与 D-Bus daemon 通信，不需要依赖繁重的 C/C++ 编译过程（除了底层的 `myde-unix-socket` 支持外），在现代 JavaScript / TypeScript 环境中非常轻量且易于使用。
+本库直接在 Unix Socket 上通过协议与 D-Bus daemon 通信，不需要依赖繁重的 C/C++ 编译过程，在现代 JavaScript / TypeScript 环境中非常轻量且易于使用。
 
 ## 特性
 
@@ -15,14 +15,59 @@
 ## 安装
 
 ```bash
-npm install myde-dbus myde-unix-socket
+npm install myde-dbus
 ```
 
-_注意：本库需要使用 `myde-unix-socket` 建立底层的 Unix Domain Socket 链接。_
+_注意：本库支持两种 Unix Socket 实现方式：Node.js 原生 `net.Socket`（推荐）或 `myde-unix-socket`。_
 
 ## 快速使用
 
 ### 客户端（Client）示例
+
+#### 使用 Node.js 原生 Socket（推荐）
+
+```typescript
+import net from "net";
+import { dbusClient, dbusIO, createNodeSocketAdapter } from "myde-dbus";
+
+async function main() {
+    // 使用 Node.js 原生 net.Socket
+    const nodeSocket = new net.Socket();
+    const adapter = createNodeSocketAdapter(nodeSocket);
+
+    // 连接到系统总线或用户会话总线
+    nodeSocket.connect("/run/user/1000/bus");
+
+    // 等待连接完成
+    await new Promise((resolve) => nodeSocket.on("connect", resolve));
+
+    // 初始化 IO 并自动进行身份验证连接
+    const io = new dbusIO({ socket: adapter });
+    await io.connect();
+
+    const client = new dbusClient({ io });
+
+    // 依次获取: 服务 (Service) -> 对象路径 (Object Path) -> 接口 (Interface)
+    const service = await client.getService("org.freedesktop.DBus");
+    const obj = await service.getObject("/org/freedesktop/DBus");
+    const iface = await obj.getInterface("org.freedesktop.DBus");
+
+    // 调用无参方法
+    const response = await iface.call("ListNames");
+    console.log("总线上的所有服务名称:", response.getBody()[0]);
+}
+
+main().catch(console.error);
+```
+
+#### 使用 myde-unix-socket
+
+将提供fd传输特性，部分dbus协议可能需要
+
+
+```shell
+npm install myde-unix-socket
+```
 
 ```typescript
 import { dbusClient, dbusIO } from "myde-dbus";
@@ -60,15 +105,23 @@ main().catch(console.error);
 
 ### 服务端（Server）示例
 
+
 ```typescript
-import { dbusServer, dbusIO } from "myde-dbus";
-import { USocket } from "myde-unix-socket";
+import net from "net";
+import { dbusServer, dbusIO, createNodeSocketAdapter } from "myde-dbus";
 
 async function main() {
-    const socket = new USocket();
-    await new Promise((resolve) => socket.connect("/run/user/1000/bus", resolve));
+    // 使用 Node.js 原生 net.Socket
+    const nodeSocket = new net.Socket();
+    const adapter = createNodeSocketAdapter(nodeSocket);
 
-    const io = new dbusIO({ socket });
+    // 连接到系统总线或用户会话总线
+    nodeSocket.connect("/run/user/1000/bus");
+
+    // 等待连接完成
+    await new Promise((resolve) => nodeSocket.on("connect", resolve));
+
+    const io = new dbusIO({ socket: adapter });
     await io.connect();
 
     // 初始化 Server 并申请注册总线名称
@@ -102,7 +155,17 @@ async function main() {
 main().catch(console.error);
 ```
 
+
 ## API 参考文档
+
+### `NodeSocketAdapter`
+
+将 Node.js 原生 `net.Socket` 包装为兼容 `USocket` 接口的适配器。
+
+- `new NodeSocketAdapter(socket: net.Socket)`: 创建适配器实例
+- `createNodeSocketAdapter(socket: net.Socket)`: 工厂函数，创建适配器实例
+- `connect(path: string, cb?: () => void)`: 连接到指定的 Unix Socket 路径
+- `destroy(error?: Error)`: 销毁 socket 连接
 
 ### `dbusClient`
 
